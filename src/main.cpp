@@ -88,7 +88,7 @@ public:
         return false;
     }
 
-    int readAsync(const uint8_t* buffer, int bufferSize) {
+    int readAsync(void* buffer, int bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
@@ -106,7 +106,7 @@ public:
         return bytesRead;
     }
 
-    int writeAsync(const uint8_t* buffer, int bufferSize) {
+    int writeAsync(void* buffer, int bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
