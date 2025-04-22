@@ -25,7 +25,7 @@ public:
         if (writeOverlap.hEvent) CloseHandle(writeOverlap.hEvent);
     }
 
-    bool open(const char* portName, DWORD baudRate) {
+    bool open(const char* portName, int baudRate) {
         std::string port = "\\\\.\\";
         port += portName;
         
@@ -86,7 +86,7 @@ public:
         return false;
     }
 
-    int readAsync(BYTE* buffer, DWORD bufferSize) {
+    int readAsync(BYTE* buffer, int bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
@@ -104,12 +104,12 @@ public:
         return bytesRead;
     }
 
-    int writeAsync(const BYTE* buffer, DWORD bufferSize) {
+    int writeAsync(const BYTE* buffer, int bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
 
-        DWORD bytesWritten = 0;
+        int bytesWritten = 0;
         ResetEvent(writeOverlap.hEvent);
         
         if (!WriteFile(hSerial, buffer, bufferSize, &bytesWritten, &writeOverlap)) {
@@ -126,7 +126,7 @@ public:
 static SerialPort* port = nullptr;
 
 extern "C" {
-    __declspec(dllexport) int OpenSerialPort(const char* portName, DWORD baudRate) {
+    __declspec(dllexport) int OpenSerialPort(const char* portName, int baudRate) {
         try {
             if (port != nullptr) {
                 delete port;
@@ -154,7 +154,7 @@ extern "C" {
         }
     }
 
-    __declspec(dllexport) int ReadSerialPort(BYTE* buffer, DWORD bufferSize) {
+    __declspec(dllexport) int ReadSerialPort(BYTE* buffer, int bufferSize) {
         try {
             if (port == nullptr) {
                 return 0;
@@ -166,7 +166,7 @@ extern "C" {
         }
     }
 
-    __declspec(dllexport) int WriteSerialPort(const BYTE* buffer, DWORD bufferSize) {
+    __declspec(dllexport) int WriteSerialPort(const BYTE* buffer, int bufferSize) {
         try {
             if (port == nullptr) {
                 return 0;
