@@ -86,7 +86,7 @@ public:
         return false;
     }
 
-    DWORD readAsync(BYTE* buffer, DWORD bufferSize) {
+    int readAsync(BYTE* buffer, DWORD bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
@@ -104,7 +104,7 @@ public:
         return bytesRead;
     }
 
-    DWORD writeAsync(const BYTE* buffer, DWORD bufferSize) {
+    int writeAsync(const BYTE* buffer, DWORD bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
