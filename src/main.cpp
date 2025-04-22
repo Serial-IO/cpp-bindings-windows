@@ -126,55 +126,28 @@ public:
 static SerialPort* port = nullptr;
 
 extern "C" {
-    __declspec(dllexport) int OpenSerialPort(const char* portName, int baudRate) {
-        try {
-            if (port != nullptr) {
-                delete port;
-            }
-            port = new SerialPort();
-            return port->open(portName, baudRate) ? 1 : 0;
-        }
-        catch (...) {
-            return 0;
-        }
+    __declspec(dllexport) int OpenSerialPort(
+        const uint8_t* portName,
+        int baudRate
+    ) {
+        return 0;
     }
 
     __declspec(dllexport) int CloseSerialPort() {
-        try {
-            if (port != nullptr) {
-                bool result = port->close();
-                delete port;
-                port = nullptr;
-                return result ? 1 : 0;
-            }
-            return 0;
-        }
-        catch (...) {
-            return 0;
-        }
+        return 0;
     }
 
-    __declspec(dllexport) int ReadSerialPort(BYTE* buffer, int bufferSize) {
-        try {
-            if (port == nullptr) {
-                return 0;
-            }
-            return port->readAsync(buffer, bufferSize);
-        }
-        catch (...) {
-            return 0;
-        }
+    __declspec(dllexport) int ReadSerialPort(
+        const uint8_t* buffer,
+        int bufferSize
+    ) {
+        return 0;
     }
 
-    __declspec(dllexport) int WriteSerialPort(const BYTE* buffer, int bufferSize) {
-        try {
-            if (port == nullptr) {
-                return 0;
-            }
-            return port->writeAsync(buffer, bufferSize);
-        }
-        catch (...) {
-            return 0;
-        }
+    __declspec(dllexport) int WriteSerialPort(
+        const uint8_t* buffer,
+        int bufferSize
+    ) {
+        return 0;
     }
 }
