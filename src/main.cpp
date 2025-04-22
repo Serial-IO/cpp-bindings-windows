@@ -29,13 +29,15 @@ public:
         std::string port = "\\\\.\\";
         port += portName;
         
-        hSerial = CreateFileA(port.c_str(),
-                            GENERIC_READ | GENERIC_WRITE,
-                            0,
-                            NULL,
-                            OPEN_EXISTING,
-                            FILE_FLAG_OVERLAPPED,
-                            NULL);
+        hSerial = CreateFileA(
+            port.c_str(),
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            NULL,
+            OPEN_EXISTING,
+            FILE_FLAG_OVERLAPPED,
+            NULL
+        );
 
         if (hSerial == INVALID_HANDLE_VALUE) {
             return false;
@@ -86,7 +88,7 @@ public:
         return false;
     }
 
-    int readAsync(BYTE* buffer, int bufferSize) {
+    int readAsync(const uint8_t* , int bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
@@ -104,7 +106,7 @@ public:
         return bytesRead;
     }
 
-    int writeAsync(const BYTE* buffer, int bufferSize) {
+    int writeAsync(const uint8_t* buffer, int bufferSize) {
         if (hSerial == INVALID_HANDLE_VALUE) {
             return 0;
         }
