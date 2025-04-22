@@ -109,7 +109,7 @@ public:
             return 0;
         }
 
-        int bytesWritten = 0;
+        DWORD bytesWritten = 0;
         ResetEvent(writeOverlap.hEvent);
         
         if (!WriteFile(hSerial, buffer, bufferSize, &bytesWritten, &writeOverlap)) {
