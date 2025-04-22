@@ -151,7 +151,7 @@ extern "C" {
     }
 
     __declspec(dllexport) int ReadSerialPort(
-        const uint8_t* buffer,
+        void* buffer,
         int bufferSize
     ) {
         try {
@@ -166,7 +166,7 @@ extern "C" {
     }
 
     __declspec(dllexport) int WriteSerialPort(
-        const uint8_t* buffer,
+        void* buffer,
         int bufferSize
     ) {
         try {
