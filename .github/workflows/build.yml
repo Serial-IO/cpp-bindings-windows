@@ -20,8 +20,8 @@ jobs:
     - name: Compile DLL
       run: |
         mkdir -p ./build
-        g++ -shared -m32 -o ./build/main.dll ./src/main.cpp
-        g++ -shared -m32 -o ./build/test.dll ./src/test.cpp
+        g++ -shared -o ./build/main.dll ./src/main.cpp
+        g++ -shared -o ./build/test.dll ./src/test.cpp
 
     - name: Upload DLL artifact
       uses: actions/upload-artifact@v4
