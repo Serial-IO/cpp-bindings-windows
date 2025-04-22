@@ -154,7 +154,7 @@ extern "C" {
         }
     }
 
-    __declspec(dllexport) DWORD ReadSerialPort(BYTE* buffer, DWORD bufferSize) {
+    __declspec(dllexport) int ReadSerialPort(BYTE* buffer, DWORD bufferSize) {
         try {
             if (port == nullptr) {
                 return 0;
@@ -166,7 +166,7 @@ extern "C" {
         }
     }
 
-    __declspec(dllexport) DWORD WriteSerialPort(const BYTE* buffer, DWORD bufferSize) {
+    __declspec(dllexport) int WriteSerialPort(const BYTE* buffer, DWORD bufferSize) {
         try {
             if (port == nullptr) {
                 return 0;
@@ -177,19 +177,4 @@ extern "C" {
             return 0;
         }
     }
-}
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
-    switch (fdwReason) {
-        case DLL_PROCESS_ATTACH:
-            port = nullptr;
-            break;
-        case DLL_PROCESS_DETACH:
-            if (port != nullptr) {
-                delete port;
-                port = nullptr;
-            }
-            break;
-    }
-    return TRUE;
 }
