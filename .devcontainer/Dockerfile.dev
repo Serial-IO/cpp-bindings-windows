@@ -1,0 +1,13 @@
+FROM fedora:42
+
+RUN dnf install -y \
+    clang \
+    clang-tools-extra \
+    clangd \
+    clang-format \
+    clang-tidy \
+    clang-analyzer \
+    cmake \
+    git \
+    ninja-build \
+    && dnf clean all

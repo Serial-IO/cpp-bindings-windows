@@ -4,7 +4,7 @@ set(VERSION_MAJOR 0)
 set(VERSION_MINOR 2)
 set(VERSION_PATCH 0)
 
-set(PROJECT_N cpp_unix_bindings)
+set(PROJECT_N cpp_windows_bindings)
 project(${PROJECT_N} VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 # Generate compile_commands.json for clang-based tooling (clangd / clang-tidy)
@@ -93,4 +93,4 @@ add_custom_command(TARGET tests POST_BUILD
     COMMENT "Copy shared library next to aggregated test binary")
 
 enable_testing()
-add_test(NAME AllTests COMMAND tests /dev/ttyUSB0)
+add_test(NAME AllTests COMMAND tests COM3)

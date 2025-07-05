@@ -38,7 +38,7 @@
 
 namespace
 {
-const char* default_port = "/dev/ttyUSB0";
+const char* default_port = "COM3"; // Adjust as needed for your system
 } // namespace
 
 TEST(SerialEchoTest, EchoMessage)

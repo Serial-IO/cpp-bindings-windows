@@ -1,19 +1,19 @@
 #include "serial.h"
-
 #include "status_codes.h"
 
+// Windows serial implementation
+// -----------------------------------------------------------------------------
+// NOTE: This file only supports the Windows API. All POSIX specific code has
+// been removed.
+// -----------------------------------------------------------------------------
+
+#include <Windows.h>
 #include <algorithm>
 #include <atomic>
 #include <cstring>
-#include <fcntl.h>
-#include <filesystem>
 #include <string>
 #include <string_view>
-#include <sys/ioctl.h>
-#include <sys/select.h>
-#include <termios.h>
-#include <unistd.h>
-#include <utility>
+#include <vector>
 
 // -----------------------------------------------------------------------------
 // Global callback function pointers (default nullptr)
@@ -30,8 +30,8 @@ namespace
 
 struct SerialPortHandle
 {
-    int file_descriptor;
-    termios original; // keep original settings so we can restore on close
+    HANDLE handle{INVALID_HANDLE_VALUE};
+    DCB    original_dcb{}; // keep original settings so we can restore on close
 
     int64_t rx_total{0}; // bytes received so far
     int64_t tx_total{0}; // bytes transmitted so far
@@ -43,68 +43,98 @@ struct SerialPortHandle
     std::atomic<bool> abort_write{false};
 };
 
-// Map integer baudrate to POSIX speed_t. Only common rates are supported.
-auto to_speed_t(int baud) -> speed_t
-{
-    switch (baud)
-    {
-    case 0:
-        return B0;
-    case 50:
-        return B50;
-    case 75:
-        return B75;
-    case 110:
-        return B110;
-    case 134:
-        return B134;
-    case 150:
-        return B150;
-    case 200:
-        return B200;
-    case 300:
-        return B300;
-    case 600:
-        return B600;
-    case 1200:
-        return B1200;
-    case 1800:
-        return B1800;
-    case 2400:
-        return B2400;
-    case 4800:
-        return B4800;
-    case 9600:
-        return B9600;
-    case 19200:
-        return B19200;
-    case 38400:
-        return B38400;
-    case 57600:
-        return B57600;
-    case 115200:
-        return B115200;
-    case 230400:
-        return B230400;
-#ifdef B460800
-    case 460800:
-        return B460800;
-#endif
-#ifdef B921600
-    case 921600:
-        return B921600;
-#endif
-    default:
-        return B9600; // fallback
-    }
-}
-
 inline void invokeError(int code)
 {
     if (error_callback != nullptr)
     {
         error_callback(code);
     }
+}
+
+// Convert baudrate integer to constant directly (Windows API accepts int)
+inline bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int stopBits)
+{
+    DCB dcb{};
+    dcb.DCBlength = sizeof(DCB);
+    if (!GetCommState(h, &dcb))
+    {
+        return false;
+    }
+
+    // Store a copy of the original DCB? -> done outside
+
+    dcb.BaudRate = static_cast<DWORD>(baudrate);
+    dcb.ByteSize = static_cast<BYTE>(std::clamp(dataBits, 5, 8));
+
+    // Parity
+    switch (parity)
+    {
+    case 1: // even
+        dcb.Parity   = EVENPARITY;
+        dcb.fParity  = TRUE;
+        break;
+    case 2: // odd
+        dcb.Parity   = ODDPARITY;
+        dcb.fParity  = TRUE;
+        break;
+    default:
+        dcb.Parity   = NOPARITY;
+        dcb.fParity  = FALSE;
+        break;
+    }
+
+    // Stop bits
+    dcb.StopBits = (stopBits == 2) ? TWOSTOPBITS : ONESTOPBIT;
+
+    // Disable hardware/software flow control
+    dcb.fOutxCtsFlow = FALSE;
+    dcb.fOutxDsrFlow = FALSE;
+    dcb.fOutX        = FALSE;
+    dcb.fInX         = FALSE;
+
+    return !!SetCommState(h, &dcb);
+}
+
+inline void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
+{
+    COMMTIMEOUTS timeouts{};
+
+    // Read time-outs
+    if (readTimeoutMs < 0)
+    {
+        // Infinite blocking
+        timeouts.ReadIntervalTimeout         = 0;
+        timeouts.ReadTotalTimeoutConstant     = 0;
+        timeouts.ReadTotalTimeoutMultiplier   = 0;
+    }
+    else
+    {
+        timeouts.ReadIntervalTimeout         = MAXDWORD; // return immediately if no bytes available
+        timeouts.ReadTotalTimeoutConstant     = static_cast<DWORD>(readTimeoutMs);
+        timeouts.ReadTotalTimeoutMultiplier   = 0;
+    }
+
+    // Write time-outs (simple constant component only)
+    if (writeTimeoutMs >= 0)
+    {
+        timeouts.WriteTotalTimeoutConstant   = static_cast<DWORD>(writeTimeoutMs);
+        timeouts.WriteTotalTimeoutMultiplier = 0;
+    }
+
+    SetCommTimeouts(h, &timeouts);
+}
+
+// Helper that adds the required "\\\\.\\" prefix for COM ports >= 10
+inline std::string toWinComPath(std::string_view port)
+{
+    std::string p(port);
+    // If the path already starts with \\.\, leave it
+    if (p.rfind("\\\\.\\", 0) == 0)
+    {
+        return p;
+    }
+    // Prepend prefix so Windows can open COM10+
+    return "\\\\.\\" + p;
 }
 
 } // namespace
@@ -121,95 +151,47 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
         return 0;
     }
 
-    auto port_name = std::string_view{static_cast<const char*>(port)};
-    int device_descriptor = open(port_name.data(), O_RDWR | O_NOCTTY | O_SYNC);
-    if (device_descriptor < 0)
+    std::string_view portNameView{static_cast<const char*>(port)};
+    std::string      winPort     = toWinComPath(portNameView);
+
+    HANDLE h = CreateFileA(winPort.c_str(),
+                           GENERIC_READ | GENERIC_WRITE,
+                           0,               // exclusive access
+                           nullptr,
+                           OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL,
+                           nullptr);
+
+    if (h == INVALID_HANDLE_VALUE)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
         return 0;
     }
 
-    auto* handle = new SerialPortHandle{.file_descriptor = device_descriptor, .original = {}};
-
-    termios tty{};
-    if (tcgetattr(device_descriptor, &tty) != 0)
+    // Save original DCB first
+    DCB original{};
+    original.DCBlength = sizeof(DCB);
+    if (!GetCommState(h, &original))
     {
         invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
-        close(device_descriptor);
-        delete handle;
+        CloseHandle(h);
         return 0;
     }
-    handle->original = tty; // save original
 
-    // Basic flags: local connection, enable receiver
-    tty.c_cflag |= (CLOCAL | CREAD);
-
-    // Baudrate
-    const speed_t speed = to_speed_t(baudrate);
-    cfsetispeed(&tty, speed);
-    cfsetospeed(&tty, speed);
-
-    // Data bits
-    tty.c_cflag &= ~CSIZE;
-    switch (dataBits)
-    {
-    case 5:
-        tty.c_cflag |= CS5;
-        break;
-    case 6:
-        tty.c_cflag |= CS6;
-        break;
-    case 7:
-        tty.c_cflag |= CS7;
-        break;
-    default:
-        tty.c_cflag |= CS8;
-        break;
-    }
-
-    // Parity
-    if (parity == 0)
-    {
-        tty.c_cflag &= ~PARENB;
-    }
-    else
-    {
-        tty.c_cflag |= PARENB;
-        if (parity == 1)
-        {
-            tty.c_cflag &= ~PARODD; // even
-        }
-        else
-        {
-            tty.c_cflag |= PARODD; // odd
-        }
-    }
-
-    // Stop bits
-    if (stopBits == 2)
-    {
-        tty.c_cflag |= CSTOPB;
-    }
-    else
-    {
-        tty.c_cflag &= ~CSTOPB;
-    }
-
-    // Raw mode (no echo/processing)
-    tty.c_iflag = 0;
-    tty.c_oflag = 0;
-    tty.c_lflag = 0;
-
-    tty.c_cc[VMIN] = 0;   // non-blocking by default
-    tty.c_cc[VTIME] = 10; // 1s read timeout
-
-    if (tcsetattr(device_descriptor, TCSANOW, &tty) != 0)
+    // Configure DCB with requested settings
+    if (!configurePort(h, baudrate, dataBits, parity, stopBits))
     {
         invokeError(std::to_underlying(StatusCodes::SET_STATE_ERROR));
-        close(device_descriptor);
-        delete handle;
+        CloseHandle(h);
         return 0;
     }
+
+    // Default timeouts – can be overridden per read/write call
+    setPortTimeouts(h, 1000, 1000);
+
+    auto* handle = new SerialPortHandle{};
+    handle->handle        = h;
+    handle->original_dcb  = original;
 
     return reinterpret_cast<intptr_t>(handle);
 }
@@ -222,30 +204,87 @@ void serialClose(int64_t handlePtr)
         return;
     }
 
-    tcsetattr(handle->file_descriptor, TCSANOW, &handle->original); // restore
-    if (close(handle->file_descriptor) != 0)
-    {
-        invokeError(std::to_underlying(StatusCodes::CLOSE_HANDLE_ERROR));
-    }
+    // Restore original state
+    SetCommState(handle->handle, &handle->original_dcb);
+    FlushFileBuffers(handle->handle);
+    CloseHandle(handle->handle);
+
     delete handle;
 }
 
-static int waitFdReady(int fileDescriptor, int timeoutMs, bool wantWrite)
+// --- Core IO helpers --------------------------------------------------------
+
+static int readFromPort(SerialPortHandle* handle, void* buffer, int bufferSize, int timeoutMs)
 {
-    timeoutMs = std::max(timeoutMs, 0);
+    if (handle == nullptr)
+    {
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        return 0;
+    }
 
-    fd_set descriptor_set;
-    FD_ZERO(&descriptor_set);
-    FD_SET(fileDescriptor, &descriptor_set);
+    if (handle->abort_read.exchange(false))
+    {
+        return 0;
+    }
 
-    timeval wait_time{};
-    wait_time.tv_sec = timeoutMs / 1000;
-    wait_time.tv_usec = (timeoutMs % 1000) * 1000;
+    setPortTimeouts(handle->handle, timeoutMs, -1);
 
-    int ready_result =
-        select(fileDescriptor + 1, wantWrite ? nullptr : &descriptor_set, wantWrite ? &descriptor_set : nullptr, nullptr, &wait_time);
-    return ready_result; // 0 timeout, -1 error, >0 ready
+    DWORD bytesRead = 0;
+    BOOL  ok        = ReadFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytesRead, nullptr);
+    if (!ok)
+    {
+        invokeError(std::to_underlying(StatusCodes::READ_ERROR));
+        return 0;
+    }
+
+    if (bytesRead > 0)
+    {
+        handle->rx_total += bytesRead;
+        if (read_callback != nullptr)
+        {
+            read_callback(static_cast<int>(bytesRead));
+        }
+    }
+
+    return static_cast<int>(bytesRead);
 }
+
+static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferSize, int timeoutMs)
+{
+    if (handle == nullptr)
+    {
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        return 0;
+    }
+
+    if (handle->abort_write.exchange(false))
+    {
+        return 0;
+    }
+
+    setPortTimeouts(handle->handle, -1, timeoutMs);
+
+    DWORD bytesWritten = 0;
+    BOOL  ok           = WriteFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytesWritten, nullptr);
+    if (!ok)
+    {
+        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
+        return 0;
+    }
+
+    if (bytesWritten > 0)
+    {
+        handle->tx_total += bytesWritten;
+        if (write_callback != nullptr)
+        {
+            write_callback(static_cast<int>(bytesWritten));
+        }
+    }
+
+    return static_cast<int>(bytesWritten);
+}
+
+// --- Public IO wrappers -----------------------------------------------------
 
 int serialRead(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int /*multiplier*/)
 {
@@ -256,97 +295,39 @@ int serialRead(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int
         return 0;
     }
 
-    // Abort check
-    if (handle->abort_read.exchange(false))
-    {
-        return 0;
-    }
-
-    int total_copied = 0;
-
     // First deliver byte from internal peek buffer if present
+    int totalCopied = 0;
     if (handle->has_peek && bufferSize > 0)
     {
         static_cast<char*>(buffer)[0] = handle->peek_char;
-        handle->has_peek = false;
+        handle->has_peek              = false;
         handle->rx_total += 1;
-        total_copied = 1;
-        buffer = static_cast<char*>(buffer) + 1;
+        totalCopied       = 1;
+
+        buffer     = static_cast<char*>(buffer) + 1;
         bufferSize -= 1;
+
         if (bufferSize == 0)
         {
             if (read_callback != nullptr)
             {
-                read_callback(total_copied);
+                read_callback(totalCopied);
             }
-            return total_copied;
+            return totalCopied;
         }
     }
 
-    if (waitFdReady(handle->file_descriptor, timeout, false) <= 0)
-    {
-        return total_copied; // return what we may have already copied (could be 0)
-    }
-
-    ssize_t bytes_read_system = read(handle->file_descriptor, buffer, bufferSize);
-    if (bytes_read_system < 0)
-    {
-        invokeError(std::to_underlying(StatusCodes::READ_ERROR));
-        return total_copied;
-    }
-
-    if (bytes_read_system > 0)
-    {
-        handle->rx_total += bytes_read_system;
-    }
-
-    total_copied += static_cast<int>(bytes_read_system);
-
-    if (read_callback != nullptr)
-    {
-        read_callback(total_copied);
-    }
-    return total_copied;
+    int bytesRead = readFromPort(handle, buffer, bufferSize, timeout);
+    return totalCopied + bytesRead;
 }
 
 int serialWrite(int64_t handlePtr, const void* buffer, int bufferSize, int timeout, int /*multiplier*/)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
-    {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
-        return 0;
-    }
-
-    // Abort check
-    if (handle->abort_write.exchange(false))
-    {
-        return 0;
-    }
-
-    if (waitFdReady(handle->file_descriptor, timeout, true) <= 0)
-    {
-        return 0; // timeout or error
-    }
-
-    ssize_t bytes_written_system = write(handle->file_descriptor, buffer, bufferSize);
-    if (bytes_written_system < 0)
-    {
-        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
-        return 0;
-    }
-
-    if (bytes_written_system > 0)
-    {
-        handle->tx_total += bytes_written_system;
-    }
-
-    if (write_callback != nullptr)
-    {
-        write_callback(static_cast<int>(bytes_written_system));
-    }
-    return static_cast<int>(bytes_written_system);
+    return writeToPort(handle, buffer, bufferSize, timeout);
 }
+
+// ---------------- Higher level helpers -------------------------------------
 
 int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int /*multiplier*/, void* untilCharPtr)
 {
@@ -357,23 +338,23 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
         return 0;
     }
 
-    char until_character = *static_cast<char*>(untilCharPtr);
-    int total = 0;
-    auto* char_buffer = static_cast<char*>(buffer);
+    char untilChar = *static_cast<char*>(untilCharPtr);
+    int  total     = 0;
+    auto* buf      = static_cast<char*>(buffer);
 
     while (total < bufferSize)
     {
-        int read_result = serialRead(handlePtr, char_buffer + total, 1, timeout, 1);
-        if (read_result <= 0)
+        int r = serialRead(handlePtr, buf + total, 1, timeout, 1);
+        if (r <= 0)
         {
-            break; // timeout or error
+            break;
         }
-        if (char_buffer[total] == until_character)
+        if (buf[total] == untilChar)
         {
             total += 1;
             break;
         }
-        total += read_result;
+        total += r;
     }
 
     if (read_callback != nullptr)
@@ -383,49 +364,28 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
     return total;
 }
 
+// List available COM ports using QueryDosDevice
 int serialGetPortsInfo(void* buffer, int bufferSize, void* separatorPtr)
 {
-    auto sep = std::string_view{static_cast<const char*>(separatorPtr)};
-    std::string result;
+    const std::string_view sep{static_cast<const char*>(separatorPtr)};
+    std::string            result;
 
-    namespace fs = std::filesystem;
+    constexpr int maxPorts = 256;
+    char       pathBuf[256];
 
-    const fs::path by_id_dir{"/dev/serial/by-id"};
-    if (!fs::exists(by_id_dir) || !fs::is_directory(by_id_dir))
+    for (int i = 1; i <= maxPorts; ++i)
     {
-        invokeError(std::to_underlying(StatusCodes::NOT_FOUND_ERROR));
-        return 0;
-    }
-
-    try
-    {
-        for (const auto& entry : fs::directory_iterator{by_id_dir})
+        std::string port = "COM" + std::to_string(i);
+        if (QueryDosDeviceA(port.c_str(), pathBuf, sizeof(pathBuf)))
         {
-            if (!entry.is_symlink())
-            {
-                continue;
-            }
-
-            std::error_code error_code;
-            fs::path canonical = fs::canonical(entry.path(), error_code);
-            if (error_code)
-            {
-                continue; // skip entries we cannot resolve
-            }
-
-            result += canonical.string();
+            result += port;
             result += sep;
         }
-    }
-    catch (const fs::filesystem_error&)
-    {
-        invokeError(std::to_underlying(StatusCodes::NOT_FOUND_ERROR));
-        return 0;
     }
 
     if (!result.empty())
     {
-        // Remove the trailing separator
+        // Remove trailing separator
         result.erase(result.size() - sep.size());
     }
 
@@ -436,7 +396,7 @@ int serialGetPortsInfo(void* buffer, int bufferSize, void* separatorPtr)
     }
 
     std::memcpy(buffer, result.c_str(), result.size() + 1);
-    return result.empty() ? 0 : 1; // number of ports not easily counted here
+    return result.empty() ? 0 : 1;
 }
 
 // -----------------------------------------------------------------------------
@@ -450,8 +410,7 @@ void serialClearBufferIn(int64_t handlePtr)
     {
         return;
     }
-    tcflush(handle->file_descriptor, TCIFLUSH);
-    // reset peek buffer
+    PurgeComm(handle->handle, PURGE_RXABORT | PURGE_RXCLEAR);
     handle->has_peek = false;
 }
 
@@ -462,47 +421,38 @@ void serialClearBufferOut(int64_t handlePtr)
     {
         return;
     }
-    tcflush(handle->file_descriptor, TCOFLUSH);
+    PurgeComm(handle->handle, PURGE_TXABORT | PURGE_TXCLEAR);
 }
 
 void serialAbortRead(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
+    if (handle != nullptr)
     {
-        return;
+        handle->abort_read = true;
     }
-    handle->abort_read = true;
 }
 
 void serialAbortWrite(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
+    if (handle != nullptr)
     {
-        return;
+        handle->abort_write = true;
     }
-    handle->abort_write = true;
 }
 
 // -----------------------------------------------------------------------------
-
 // Callback registration
-void serialOnError(void (*func)(int code))
-{
-    error_callback = func;
-}
-void serialOnRead(void (*func)(int bytes))
-{
-    read_callback = func;
-}
-void serialOnWrite(void (*func)(int bytes))
-{
-    write_callback = func;
-}
+// -----------------------------------------------------------------------------
+
+void serialOnError(void (*func)(int code)) { error_callback = func; }
+void serialOnRead(void (*func)(int bytes)) { read_callback   = func; }
+void serialOnWrite(void (*func)(int bytes)) { write_callback = func; }
 
 // -----------------------------------------------------------------------------
-// Extended helper APIs (read line, token, frame, statistics, etc.)
+// Helper utilities (read line, read frame, statistics, etc.) copied/adapted
+// from the original implementation as they remain platform-agnostic.
 // -----------------------------------------------------------------------------
 
 int serialReadLine(int64_t handlePtr, void* buffer, int bufferSize, int timeout)
@@ -513,64 +463,57 @@ int serialReadLine(int64_t handlePtr, void* buffer, int bufferSize, int timeout)
 
 int serialWriteLine(int64_t handlePtr, const void* buffer, int bufferSize, int timeout)
 {
-    // First write the payload
-    int written = serialWrite(handlePtr, buffer, bufferSize, timeout, 1);
-    if (written != bufferSize)
+    // Write payload
+    int bytesWritten = serialWrite(handlePtr, buffer, bufferSize, timeout, 1);
+    if (bytesWritten != bufferSize)
     {
-        return written; // error path, propagate
+        return bytesWritten;
     }
-    // Append newline (\n)
-    char new_line_char = '\n';
-    int newline_result = serialWrite(handlePtr, &new_line_char, 1, timeout, 1);
-    if (newline_result != 1)
-    {
-        return written; // newline failed, but payload written
-    }
-    return written + 1;
+
+    // Append newline
+    const char newline = '\n';
+    int writtenNl      = serialWrite(handlePtr, &newline, 1, timeout, 1);
+    return (writtenNl == 1) ? (bytesWritten + 1) : bytesWritten;
 }
 
 int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int timeout, void* tokenPtr)
 {
-    const auto* token_cstr = static_cast<const char*>(tokenPtr);
-    if (token_cstr == nullptr)
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
+    if (handle == nullptr)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
         return 0;
     }
-    std::string token{token_cstr};
-    int token_len = static_cast<int>(token.size());
-    if (token_len == 0 || bufferSize < token_len)
-    {
-        return 0;
-    }
 
-    auto* char_buffer = static_cast<char*>(buffer);
-    int total = 0;
-    int matched = 0; // how many chars of token matched so far
+    const char* token = static_cast<const char*>(tokenPtr);
+    int         tokenLen = static_cast<int>(std::strlen(token));
+
+    auto* buf = static_cast<char*>(buffer);
+    int   total = 0;
+    int   matchPos = 0;
 
     while (total < bufferSize)
     {
-        int read_result = serialRead(handlePtr, char_buffer + total, 1, timeout, 1);
-        if (read_result <= 0)
+        int r = serialRead(handlePtr, buf + total, 1, timeout, 1);
+        if (r <= 0)
         {
-            break; // timeout or error
+            break;
         }
 
-        char current_char = char_buffer[total];
-        total += 1;
-
-        if (current_char == token[matched])
+        if (buf[total] == token[matchPos])
         {
-            matched += 1;
-            if (matched == token_len)
+            matchPos += 1;
+            if (matchPos == tokenLen)
             {
-                break; // token fully matched
+                total += 1;
+                break; // full token matched
             }
         }
         else
         {
-            matched = (current_char == token[0]) ? 1 : 0; // restart match search
+            matchPos = 0; // reset match progress
         }
+        total += r;
     }
 
     if (read_callback != nullptr)
@@ -582,57 +525,56 @@ int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int ti
 
 int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout, char startByte, char endByte)
 {
-    auto* char_buffer = static_cast<char*>(buffer);
-    int total = 0;
-    bool in_frame = false;
+    auto* buf   = static_cast<char*>(buffer);
+    int   total = 0;
 
+    // Wait for start byte
+    char byte = 0;
+    while (true)
+    {
+        int r = serialRead(handlePtr, &byte, 1, timeout, 1);
+        if (r <= 0)
+        {
+            return 0; // timeout or error
+        }
+        if (byte == startByte)
+        {
+            buf[0] = byte;
+            total  = 1;
+            break;
+        }
+    }
+
+    // Read until end byte
     while (total < bufferSize)
     {
-        char current_byte;
-        int read_result = serialRead(handlePtr, &current_byte, 1, timeout, 1);
-        if (read_result <= 0)
+        int r = serialRead(handlePtr, &byte, 1, timeout, 1);
+        if (r <= 0)
         {
-            break; // timeout
+            break;
         }
-
-        if (!in_frame)
+        buf[total] = byte;
+        total += 1;
+        if (byte == endByte)
         {
-            if (current_byte == startByte)
-            {
-                in_frame = true;
-                char_buffer[total++] = current_byte;
-            }
-            continue; // ignore bytes until start byte detected
-        }
-
-        char_buffer[total++] = current_byte;
-        if (current_byte == endByte)
-        {
-            break; // frame finished
+            break;
         }
     }
 
     return total;
 }
 
+// Statistics helpers
 int64_t serialGetRxBytes(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
-    {
-        return 0;
-    }
-    return handle->rx_total;
+    return (handle != nullptr) ? handle->rx_total : 0;
 }
 
 int64_t serialGetTxBytes(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
-    {
-        return 0;
-    }
-    return handle->tx_total;
+    return (handle != nullptr) ? handle->tx_total : 0;
 }
 
 int serialPeek(int64_t handlePtr, void* outByte, int timeout)
@@ -650,23 +592,13 @@ int serialPeek(int64_t handlePtr, void* outByte, int timeout)
         return 1;
     }
 
-    char received_byte;
-    int read_outcome = serialRead(handlePtr, &received_byte, 1, timeout, 1);
-    if (read_outcome <= 0)
+    int r = serialRead(handlePtr, &handle->peek_char, 1, timeout, 1);
+    if (r == 1)
     {
-        return 0; // nothing available
+        handle->has_peek           = true;
+        *static_cast<char*>(outByte) = handle->peek_char;
     }
-
-    // Store into peek buffer and undo stats increment
-    handle->peek_char = received_byte;
-    handle->has_peek = true;
-    if (handle->rx_total > 0)
-    {
-        handle->rx_total -= 1; // don't account peek
-    }
-
-    *static_cast<char*>(outByte) = received_byte;
-    return 1;
+    return r;
 }
 
 int serialDrain(int64_t handlePtr)
@@ -677,5 +609,11 @@ int serialDrain(int64_t handlePtr)
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
         return 0;
     }
-    return (tcdrain(handle->file_descriptor) == 0) ? 1 : 0;
-}
+
+    if (!FlushFileBuffers(handle->handle))
+    {
+        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
+        return 0;
+    }
+    return 1;
+} 

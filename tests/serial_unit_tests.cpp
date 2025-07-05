@@ -6,13 +6,11 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
 #include <thread>
-#include <unistd.h>
 
 namespace
 {
@@ -31,7 +29,7 @@ void errorCallback(int code)
 const char* getDefaultPort()
 {
     const char* env = std::getenv("SERIAL_PORT");
-    return (env != nullptr) ? env : "/dev/ttyUSB0";
+    return (env != nullptr) ? env : "COM3";
 }
 
 struct SerialDevice
@@ -74,7 +72,7 @@ TEST(SerialOpenTest, InvalidPathInvokesErrorCallback)
     g_err_ptr = &err_code;
     serialOnError(errorCallback);
 
-    intptr_t handle = serialOpen((void*)"/dev/__does_not_exist__", 115200, 8, 0, 0);
+    intptr_t handle = serialOpen((void*)"COM999", 115200, 8, 0, 0);
     EXPECT_EQ(handle, 0);
     EXPECT_EQ(err_code.load(), static_cast<int>(StatusCodes::INVALID_HANDLE_ERROR));
 
@@ -133,7 +131,7 @@ TEST(SerialGetPortsInfoTest, PrintAvailablePorts)
     std::string ports_str(info_buffer.data());
     if (!ports_str.empty())
     {
-        std::cout << "\nAvailable serial ports (by-id):\n";
+        std::cout << "\nAvailable serial ports:\n";
         size_t start = 0;
         while (true)
         {
@@ -149,7 +147,7 @@ TEST(SerialGetPortsInfoTest, PrintAvailablePorts)
     }
     else
     {
-        std::cout << "\nNo serial devices found in /dev/serial/by-id\n";
+        std::cout << "\nNo serial devices found.\n";
     }
 }
 
