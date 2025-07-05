@@ -284,9 +284,9 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
 
 // --- Public IO wrappers -----------------------------------------------------
 
-int serialRead(int64_t handlePointer, void* buffer, int bufferSize, int timeout, int /*multiplier*/)
+int serialRead(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int /*multiplier*/)
 {
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePointer);
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialRead: handle pointer is null");
@@ -305,22 +305,22 @@ int serialWrite(int64_t handlePtr, const void* buffer, int bufferSize, int timeo
 
 // ---------------- Higher level helpers -------------------------------------
 
-int serialReadUntil(int64_t handlePointer, void* buffer, int bufferSize, int timeout, int /*multiplier*/, void* untilCharPointer)
+int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int /*multiplier*/, void* untilCharPtr)
 {
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePointer);
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntil: handle pointer is null");
         return 0;
     }
 
-    char until_char = *static_cast<char*>(untilCharPointer);
+    char until_char = *static_cast<char*>(untilCharPtr);
     int total = 0;
     auto* buf = static_cast<char*>(buffer);
 
     while (total < bufferSize)
     {
-        int r = serialRead(handlePointer, buf + total, 1, timeout, 1);
+        int r = serialRead(handlePtr, buf + total, 1, timeout, 1);
         if (r <= 0)
         {
             break;
@@ -340,16 +340,16 @@ int serialReadUntil(int64_t handlePointer, void* buffer, int bufferSize, int tim
     return total;
 }
 
-int serialReadUntilSequence(int64_t handlePointer, void* buffer, int bufferSize, int timeout, void* sequencePointer)
+int serialReadUntilSequence(int64_t handlePtr, void* buffer, int bufferSize, int timeout, void* sequencePtr)
 {
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePointer);
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntilSequence: handle pointer is null");
         return 0;
     }
 
-    const char* sequence = static_cast<const char*>(sequencePointer);
+    const char* sequence = static_cast<const char*>(sequencePtr);
     int token_len = static_cast<int>(std::strlen(sequence));
 
     auto* buf = static_cast<char*>(buffer);
@@ -358,7 +358,7 @@ int serialReadUntilSequence(int64_t handlePointer, void* buffer, int bufferSize,
 
     while (total < bufferSize)
     {
-        int r = serialRead(handlePointer, buf + total, 1, timeout, 1);
+        int r = serialRead(handlePtr, buf + total, 1, timeout, 1);
         if (r <= 0)
         {
             break;
