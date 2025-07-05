@@ -181,7 +181,8 @@ TEST(SerialHelpers, ReadUntilToken)
 
     std::array<char, 64> read_buffer{};
     constexpr std::string_view ok_token{"OK"};
-    int num_read = serialReadUntilToken(dev.handle, read_buffer.data(), static_cast<int>(read_buffer.size()), 2000, (void*)ok_token.data());
+    int num_read =
+        serialReadUntilSequence(dev.handle, read_buffer.data(), static_cast<int>(read_buffer.size()), 2000, (void*)ok_token.data());
     ASSERT_EQ(num_read, static_cast<int>(payload.size()));
     ASSERT_EQ(std::string_view(read_buffer.data(), num_read), payload);
 }

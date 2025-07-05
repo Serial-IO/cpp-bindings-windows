@@ -62,23 +62,20 @@ extern "C"
 
     MODULE_API int serialWriteLine(int64_t handle, const void* buffer, int bufferSize, int timeout /*ms*/);
 
-    MODULE_API int serialReadUntilToken(int64_t handle, void* buffer, int bufferSize, int timeout /*ms*/, void* token);
+    MODULE_API int serialReadUntilSequence(int64_t handle, void* buffer, int bufferSize, int timeout /*ms*/, void* sequence);
 
     MODULE_API int serialReadFrame(int64_t handle, void* buffer, int bufferSize, int timeout /*ms*/, char startByte, char endByte);
 
     // Byte statistics
-    MODULE_API int64_t serialGetRxBytes(int64_t handle);
-    MODULE_API int64_t serialGetTxBytes(int64_t handle);
-
-    // Peek next byte without consuming
-    MODULE_API int serialPeek(int64_t handle, void* outByte, int timeout /*ms*/);
+    MODULE_API int64_t serialOutBytesTotal(int64_t handle);
+    MODULE_API int64_t serialInBytesTotal(int64_t handle);
 
     // Drain pending TX bytes (wait until sent)
     MODULE_API int serialDrain(int64_t handle);
 
     // Bytes currently queued in the driver buffers
-    MODULE_API int serialInWaiting(int64_t handle);
-    MODULE_API int serialOutWaiting(int64_t handle);
+    MODULE_API int serialInBytesWaiting(int64_t handle);
+    MODULE_API int serialOutBytesWaiting(int64_t handle);
 
 #ifdef __cplusplus
 }

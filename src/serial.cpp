@@ -37,9 +37,6 @@ struct SerialPortHandle
     int64_t rx_total{0}; // bytes received so far
     int64_t tx_total{0}; // bytes transmitted so far
 
-    bool has_peek{false};
-    char peek_char{0};
-
     std::atomic<bool> abort_read{false};
     std::atomic<bool> abort_write{false};
 };
@@ -53,11 +50,11 @@ void invokeError(int code, const char* message)
 }
 
 // Convert baudrate integer to constant directly (Windows API accepts int)
-bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int stopBits)
+bool configurePort(HANDLE handle, int baudrate, int dataBits, int parity, int stopBits)
 {
     DCB dcb{};
     dcb.DCBlength = sizeof(DCB);
-    if (GetCommState(h, &dcb) == 0)
+    if (GetCommState(handle, &dcb) == 0)
     {
         return false;
     }
@@ -93,10 +90,10 @@ bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int stopBit
     dcb.fOutX = FALSE;
     dcb.fInX = FALSE;
 
-    return !(SetCommState(h, &dcb) == 0);
+    return !(SetCommState(handle, &dcb) == 0);
 }
 
-void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
+void setPortTimeouts(HANDLE handle, int readTimeoutMs, int writeTimeoutMs)
 {
     COMMTIMEOUTS timeouts{};
 
@@ -122,7 +119,7 @@ void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
         timeouts.WriteTotalTimeoutMultiplier = 0;
     }
 
-    SetCommTimeouts(h, &timeouts);
+    SetCommTimeouts(handle, &timeouts);
 }
 
 // Helper that adds the required "\\\\.\\" prefix for COM ports >= 10
@@ -287,39 +284,17 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
 
 // --- Public IO wrappers -----------------------------------------------------
 
-int serialRead(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int /*multiplier*/)
+int serialRead(int64_t handlePointer, void* buffer, int bufferSize, int timeout, int /*multiplier*/)
 {
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePointer);
     if (handle == nullptr)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialRead: handle pointer is null");
         return 0;
     }
 
-    // First deliver byte from internal peek buffer if present
-    int total_copied = 0;
-    if (handle->has_peek && bufferSize > 0)
-    {
-        static_cast<char*>(buffer)[0] = handle->peek_char;
-        handle->has_peek = false;
-        handle->rx_total += 1;
-        total_copied = 1;
-
-        buffer = static_cast<char*>(buffer) + 1;
-        bufferSize -= 1;
-
-        if (bufferSize == 0)
-        {
-            if (read_callback != nullptr)
-            {
-                read_callback(total_copied);
-            }
-            return total_copied;
-        }
-    }
-
     int bytes_read = readFromPort(handle, buffer, bufferSize, timeout);
-    return total_copied + bytes_read;
+    return bytes_read;
 }
 
 int serialWrite(int64_t handlePtr, const void* buffer, int bufferSize, int timeout, int /*multiplier*/)
@@ -330,22 +305,22 @@ int serialWrite(int64_t handlePtr, const void* buffer, int bufferSize, int timeo
 
 // ---------------- Higher level helpers -------------------------------------
 
-int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int /*multiplier*/, void* untilCharPtr)
+int serialReadUntil(int64_t handlePointer, void* buffer, int bufferSize, int timeout, int /*multiplier*/, void* untilCharPointer)
 {
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePointer);
     if (handle == nullptr)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntil: handle pointer is null");
         return 0;
     }
 
-    char until_char = *static_cast<char*>(untilCharPtr);
+    char until_char = *static_cast<char*>(untilCharPointer);
     int total = 0;
     auto* buf = static_cast<char*>(buffer);
 
     while (total < bufferSize)
     {
-        int r = serialRead(handlePtr, buf + total, 1, timeout, 1);
+        int r = serialRead(handlePointer, buf + total, 1, timeout, 1);
         if (r <= 0)
         {
             break;
@@ -354,6 +329,53 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
         {
             total += 1;
             break;
+        }
+        total += r;
+    }
+
+    if (read_callback != nullptr)
+    {
+        read_callback(total);
+    }
+    return total;
+}
+
+int serialReadUntilSequence(int64_t handlePointer, void* buffer, int bufferSize, int timeout, void* sequencePointer)
+{
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePointer);
+    if (handle == nullptr)
+    {
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntilSequence: handle pointer is null");
+        return 0;
+    }
+
+    const char* sequence = static_cast<const char*>(sequencePointer);
+    int token_len = static_cast<int>(std::strlen(sequence));
+
+    auto* buf = static_cast<char*>(buffer);
+    int total = 0;
+    int match_pos = 0;
+
+    while (total < bufferSize)
+    {
+        int r = serialRead(handlePointer, buf + total, 1, timeout, 1);
+        if (r <= 0)
+        {
+            break;
+        }
+
+        if (buf[total] == sequence[match_pos])
+        {
+            match_pos += 1;
+            if (match_pos == token_len)
+            {
+                total += 1;
+                break; // full token matched
+            }
+        }
+        else
+        {
+            match_pos = 0; // reset match progress
         }
         total += r;
     }
@@ -377,7 +399,6 @@ void serialClearBufferIn(int64_t handlePtr)
         return;
     }
     PurgeComm(handle->handle, PURGE_RXABORT | PURGE_RXCLEAR);
-    handle->has_peek = false;
 }
 
 void serialClearBufferOut(int64_t handlePtr)
@@ -451,53 +472,6 @@ int serialWriteLine(int64_t handlePtr, const void* buffer, int bufferSize, int t
     return (written_nl == 1) ? (bytes_written + 1) : bytes_written;
 }
 
-int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int timeout, void* tokenPtr)
-{
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
-    {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntilToken: handle pointer is null");
-        return 0;
-    }
-
-    const char* token = static_cast<const char*>(tokenPtr);
-    int token_len = static_cast<int>(std::strlen(token));
-
-    auto* buf = static_cast<char*>(buffer);
-    int total = 0;
-    int match_pos = 0;
-
-    while (total < bufferSize)
-    {
-        int r = serialRead(handlePtr, buf + total, 1, timeout, 1);
-        if (r <= 0)
-        {
-            break;
-        }
-
-        if (buf[total] == token[match_pos])
-        {
-            match_pos += 1;
-            if (match_pos == token_len)
-            {
-                total += 1;
-                break; // full token matched
-            }
-        }
-        else
-        {
-            match_pos = 0; // reset match progress
-        }
-        total += r;
-    }
-
-    if (read_callback != nullptr)
-    {
-        read_callback(total);
-    }
-    return total;
-}
-
 int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout, char startByte, char endByte)
 {
     auto* buf = static_cast<char*>(buffer);
@@ -507,8 +481,8 @@ int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout
     char byte = 0;
     while (true)
     {
-        int r = serialRead(handlePtr, &byte, 1, timeout, 1);
-        if (r <= 0)
+        int bytes_read = serialRead(handlePtr, &byte, 1, timeout, 1);
+        if (bytes_read <= 0)
         {
             return 0; // timeout or error
         }
@@ -523,8 +497,8 @@ int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout
     // Read until end byte
     while (total < bufferSize)
     {
-        int r = serialRead(handlePtr, &byte, 1, timeout, 1);
-        if (r <= 0)
+        int bytes_read = serialRead(handlePtr, &byte, 1, timeout, 1);
+        if (bytes_read <= 0)
         {
             break;
         }
@@ -540,40 +514,16 @@ int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout
 }
 
 // Statistics helpers
-int64_t serialGetRxBytes(int64_t handlePtr)
+int64_t serialOutBytesTotal(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     return (handle != nullptr) ? handle->rx_total : 0;
 }
 
-int64_t serialGetTxBytes(int64_t handlePtr)
+int64_t serialInBytesTotal(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     return (handle != nullptr) ? handle->tx_total : 0;
-}
-
-int serialPeek(int64_t handlePtr, void* outByte, int timeout)
-{
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr || outByte == nullptr)
-    {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialPeek: handle or outByte pointer is null");
-        return 0;
-    }
-
-    if (handle->has_peek)
-    {
-        *static_cast<char*>(outByte) = handle->peek_char;
-        return 1;
-    }
-
-    int r = serialRead(handlePtr, &handle->peek_char, 1, timeout, 1);
-    if (r == 1)
-    {
-        handle->has_peek = true;
-        *static_cast<char*>(outByte) = handle->peek_char;
-    }
-    return r;
 }
 
 int serialDrain(int64_t handlePtr)
@@ -597,7 +547,7 @@ int serialDrain(int64_t handlePtr)
 // Buffer occupancy helpers (similar to PySerial in_waiting / out_waiting)
 // -----------------------------------------------------------------------------
 
-int serialInWaiting(int64_t handlePtr)
+int serialInBytesWaiting(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
@@ -616,7 +566,7 @@ int serialInWaiting(int64_t handlePtr)
     return static_cast<int>(status.cbInQue);
 }
 
-int serialOutWaiting(int64_t handlePtr)
+int serialOutBytesWaiting(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
