@@ -110,7 +110,7 @@ extern "C" int serialGetPortsInfo(void (*function)(const char* port,
             const char* end_paren = std::strchr(paren, ')');
             if (end_paren != nullptr && end_paren > paren + 1)
             {
-                com_name.assign(paren + 1, static_cast<size_t>(end_paren - paren - 1));
+                com_name.assign(paren, static_cast<size_t>(end_paren - paren - 1));
             }
         }
 
