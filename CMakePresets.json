@@ -1,0 +1,28 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "windows-mingw-gcc",
+            "displayName": "x86_64 Windows (MinGW-w64 GCC)",
+            "description": "Cross-compile for 64-bit Windows using MinGW-w64 GCC toolchain",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/mingw64.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-mingw-gcc",
+            "configurePreset": "windows-mingw-gcc"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "windows-mingw-gcc",
+            "configurePreset": "windows-mingw-gcc"
+        }
+    ]
+}

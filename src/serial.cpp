@@ -1,4 +1,5 @@
 #include "serial.h"
+
 #include "status_codes.h"
 
 // Windows serial implementation
@@ -7,13 +8,14 @@
 // been removed.
 // -----------------------------------------------------------------------------
 
-#include <Windows.h>
 #include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
+#include <windows.h>
 
 // -----------------------------------------------------------------------------
 // Global callback function pointers (default nullptr)
@@ -31,7 +33,7 @@ namespace
 struct SerialPortHandle
 {
     HANDLE handle{INVALID_HANDLE_VALUE};
-    DCB    original_dcb{}; // keep original settings so we can restore on close
+    DCB original_dcb{}; // keep original settings so we can restore on close
 
     int64_t rx_total{0}; // bytes received so far
     int64_t tx_total{0}; // bytes transmitted so far
@@ -56,7 +58,7 @@ inline bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int 
 {
     DCB dcb{};
     dcb.DCBlength = sizeof(DCB);
-    if (!GetCommState(h, &dcb))
+    if (GetCommState(h, &dcb) == 0)
     {
         return false;
     }
@@ -70,16 +72,16 @@ inline bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int 
     switch (parity)
     {
     case 1: // even
-        dcb.Parity   = EVENPARITY;
-        dcb.fParity  = TRUE;
+        dcb.Parity = EVENPARITY;
+        dcb.fParity = TRUE;
         break;
     case 2: // odd
-        dcb.Parity   = ODDPARITY;
-        dcb.fParity  = TRUE;
+        dcb.Parity = ODDPARITY;
+        dcb.fParity = TRUE;
         break;
     default:
-        dcb.Parity   = NOPARITY;
-        dcb.fParity  = FALSE;
+        dcb.Parity = NOPARITY;
+        dcb.fParity = FALSE;
         break;
     }
 
@@ -89,10 +91,10 @@ inline bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int 
     // Disable hardware/software flow control
     dcb.fOutxCtsFlow = FALSE;
     dcb.fOutxDsrFlow = FALSE;
-    dcb.fOutX        = FALSE;
-    dcb.fInX         = FALSE;
+    dcb.fOutX = FALSE;
+    dcb.fInX = FALSE;
 
-    return !!SetCommState(h, &dcb);
+    return !(SetCommState(h, &dcb) == 0);
 }
 
 inline void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
@@ -103,21 +105,21 @@ inline void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
     if (readTimeoutMs < 0)
     {
         // Infinite blocking
-        timeouts.ReadIntervalTimeout         = 0;
-        timeouts.ReadTotalTimeoutConstant     = 0;
-        timeouts.ReadTotalTimeoutMultiplier   = 0;
+        timeouts.ReadIntervalTimeout = 0;
+        timeouts.ReadTotalTimeoutConstant = 0;
+        timeouts.ReadTotalTimeoutMultiplier = 0;
     }
     else
     {
-        timeouts.ReadIntervalTimeout         = MAXDWORD; // return immediately if no bytes available
-        timeouts.ReadTotalTimeoutConstant     = static_cast<DWORD>(readTimeoutMs);
-        timeouts.ReadTotalTimeoutMultiplier   = 0;
+        timeouts.ReadIntervalTimeout = MAXDWORD; // return immediately if no bytes available
+        timeouts.ReadTotalTimeoutConstant = static_cast<DWORD>(readTimeoutMs);
+        timeouts.ReadTotalTimeoutMultiplier = 0;
     }
 
     // Write time-outs (simple constant component only)
     if (writeTimeoutMs >= 0)
     {
-        timeouts.WriteTotalTimeoutConstant   = static_cast<DWORD>(writeTimeoutMs);
+        timeouts.WriteTotalTimeoutConstant = static_cast<DWORD>(writeTimeoutMs);
         timeouts.WriteTotalTimeoutMultiplier = 0;
     }
 
@@ -129,12 +131,12 @@ inline std::string toWinComPath(std::string_view port)
 {
     std::string p(port);
     // If the path already starts with \\.\, leave it
-    if (p.rfind("\\\\.\\", 0) == 0)
+    if (p.starts_with("\\\\.\\"))
     {
         return p;
     }
     // Prepend prefix so Windows can open COM10+
-    return "\\\\.\\" + p;
+    return R"(\\.\)" + p;
 }
 
 } // namespace
@@ -151,12 +153,12 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
         return 0;
     }
 
-    std::string_view portNameView{static_cast<const char*>(port)};
-    std::string      winPort     = toWinComPath(portNameView);
+    std::string_view port_name_view{static_cast<const char*>(port)};
+    std::string win_port = toWinComPath(port_name_view);
 
-    HANDLE h = CreateFileA(winPort.c_str(),
+    HANDLE h = CreateFileA(win_port.c_str(),
                            GENERIC_READ | GENERIC_WRITE,
-                           0,               // exclusive access
+                           0, // exclusive access
                            nullptr,
                            OPEN_EXISTING,
                            FILE_ATTRIBUTE_NORMAL,
@@ -171,7 +173,7 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
     // Save original DCB first
     DCB original{};
     original.DCBlength = sizeof(DCB);
-    if (!GetCommState(h, &original))
+    if (GetCommState(h, &original) == 0)
     {
         invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
         CloseHandle(h);
@@ -190,8 +192,8 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
     setPortTimeouts(h, 1000, 1000);
 
     auto* handle = new SerialPortHandle{};
-    handle->handle        = h;
-    handle->original_dcb  = original;
+    handle->handle = h;
+    handle->original_dcb = original;
 
     return reinterpret_cast<intptr_t>(handle);
 }
@@ -229,24 +231,24 @@ static int readFromPort(SerialPortHandle* handle, void* buffer, int bufferSize, 
 
     setPortTimeouts(handle->handle, timeoutMs, -1);
 
-    DWORD bytesRead = 0;
-    BOOL  ok        = ReadFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytesRead, nullptr);
-    if (!ok)
+    DWORD bytes_read = 0;
+    BOOL ok = ReadFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytes_read, nullptr);
+    if (ok == 0)
     {
         invokeError(std::to_underlying(StatusCodes::READ_ERROR));
         return 0;
     }
 
-    if (bytesRead > 0)
+    if (bytes_read > 0)
     {
-        handle->rx_total += bytesRead;
+        handle->rx_total += bytes_read;
         if (read_callback != nullptr)
         {
-            read_callback(static_cast<int>(bytesRead));
+            read_callback(static_cast<int>(bytes_read));
         }
     }
 
-    return static_cast<int>(bytesRead);
+    return static_cast<int>(bytes_read);
 }
 
 static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferSize, int timeoutMs)
@@ -264,24 +266,24 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
 
     setPortTimeouts(handle->handle, -1, timeoutMs);
 
-    DWORD bytesWritten = 0;
-    BOOL  ok           = WriteFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytesWritten, nullptr);
-    if (!ok)
+    DWORD bytes_written = 0;
+    BOOL ok = WriteFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytes_written, nullptr);
+    if (ok == 0)
     {
         invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
         return 0;
     }
 
-    if (bytesWritten > 0)
+    if (bytes_written > 0)
     {
-        handle->tx_total += bytesWritten;
+        handle->tx_total += bytes_written;
         if (write_callback != nullptr)
         {
-            write_callback(static_cast<int>(bytesWritten));
+            write_callback(static_cast<int>(bytes_written));
         }
     }
 
-    return static_cast<int>(bytesWritten);
+    return static_cast<int>(bytes_written);
 }
 
 // --- Public IO wrappers -----------------------------------------------------
@@ -296,29 +298,29 @@ int serialRead(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int
     }
 
     // First deliver byte from internal peek buffer if present
-    int totalCopied = 0;
+    int total_copied = 0;
     if (handle->has_peek && bufferSize > 0)
     {
         static_cast<char*>(buffer)[0] = handle->peek_char;
-        handle->has_peek              = false;
+        handle->has_peek = false;
         handle->rx_total += 1;
-        totalCopied       = 1;
+        total_copied = 1;
 
-        buffer     = static_cast<char*>(buffer) + 1;
+        buffer = static_cast<char*>(buffer) + 1;
         bufferSize -= 1;
 
         if (bufferSize == 0)
         {
             if (read_callback != nullptr)
             {
-                read_callback(totalCopied);
+                read_callback(total_copied);
             }
-            return totalCopied;
+            return total_copied;
         }
     }
 
-    int bytesRead = readFromPort(handle, buffer, bufferSize, timeout);
-    return totalCopied + bytesRead;
+    int bytes_read = readFromPort(handle, buffer, bufferSize, timeout);
+    return total_copied + bytes_read;
 }
 
 int serialWrite(int64_t handlePtr, const void* buffer, int bufferSize, int timeout, int /*multiplier*/)
@@ -338,9 +340,9 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
         return 0;
     }
 
-    char untilChar = *static_cast<char*>(untilCharPtr);
-    int  total     = 0;
-    auto* buf      = static_cast<char*>(buffer);
+    char until_char = *static_cast<char*>(untilCharPtr);
+    int total = 0;
+    auto* buf = static_cast<char*>(buffer);
 
     while (total < bufferSize)
     {
@@ -349,7 +351,7 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
         {
             break;
         }
-        if (buf[total] == untilChar)
+        if (buf[total] == until_char)
         {
             total += 1;
             break;
@@ -368,15 +370,15 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
 int serialGetPortsInfo(void* buffer, int bufferSize, void* separatorPtr)
 {
     const std::string_view sep{static_cast<const char*>(separatorPtr)};
-    std::string            result;
+    std::string result;
 
-    constexpr int maxPorts = 256;
-    char       pathBuf[256];
+    constexpr int max_ports = 256;
+    char path_buf[256];
 
-    for (int i = 1; i <= maxPorts; ++i)
+    for (int i = 1; i <= max_ports; ++i)
     {
         std::string port = "COM" + std::to_string(i);
-        if (QueryDosDeviceA(port.c_str(), pathBuf, sizeof(pathBuf)))
+        if (QueryDosDeviceA(port.c_str(), path_buf, sizeof(path_buf)) != 0u)
         {
             result += port;
             result += sep;
@@ -446,9 +448,18 @@ void serialAbortWrite(int64_t handlePtr)
 // Callback registration
 // -----------------------------------------------------------------------------
 
-void serialOnError(void (*func)(int code)) { error_callback = func; }
-void serialOnRead(void (*func)(int bytes)) { read_callback   = func; }
-void serialOnWrite(void (*func)(int bytes)) { write_callback = func; }
+void serialOnError(void (*func)(int code))
+{
+    error_callback = func;
+}
+void serialOnRead(void (*func)(int bytes))
+{
+    read_callback = func;
+}
+void serialOnWrite(void (*func)(int bytes))
+{
+    write_callback = func;
+}
 
 // -----------------------------------------------------------------------------
 // Helper utilities (read line, read frame, statistics, etc.) copied/adapted
@@ -464,16 +475,16 @@ int serialReadLine(int64_t handlePtr, void* buffer, int bufferSize, int timeout)
 int serialWriteLine(int64_t handlePtr, const void* buffer, int bufferSize, int timeout)
 {
     // Write payload
-    int bytesWritten = serialWrite(handlePtr, buffer, bufferSize, timeout, 1);
-    if (bytesWritten != bufferSize)
+    int bytes_written = serialWrite(handlePtr, buffer, bufferSize, timeout, 1);
+    if (bytes_written != bufferSize)
     {
-        return bytesWritten;
+        return bytes_written;
     }
 
     // Append newline
     const char newline = '\n';
-    int writtenNl      = serialWrite(handlePtr, &newline, 1, timeout, 1);
-    return (writtenNl == 1) ? (bytesWritten + 1) : bytesWritten;
+    int written_nl = serialWrite(handlePtr, &newline, 1, timeout, 1);
+    return (written_nl == 1) ? (bytes_written + 1) : bytes_written;
 }
 
 int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int timeout, void* tokenPtr)
@@ -486,11 +497,11 @@ int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int ti
     }
 
     const char* token = static_cast<const char*>(tokenPtr);
-    int         tokenLen = static_cast<int>(std::strlen(token));
+    int token_len = static_cast<int>(std::strlen(token));
 
     auto* buf = static_cast<char*>(buffer);
-    int   total = 0;
-    int   matchPos = 0;
+    int total = 0;
+    int match_pos = 0;
 
     while (total < bufferSize)
     {
@@ -500,10 +511,10 @@ int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int ti
             break;
         }
 
-        if (buf[total] == token[matchPos])
+        if (buf[total] == token[match_pos])
         {
-            matchPos += 1;
-            if (matchPos == tokenLen)
+            match_pos += 1;
+            if (match_pos == token_len)
             {
                 total += 1;
                 break; // full token matched
@@ -511,7 +522,7 @@ int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int ti
         }
         else
         {
-            matchPos = 0; // reset match progress
+            match_pos = 0; // reset match progress
         }
         total += r;
     }
@@ -525,8 +536,8 @@ int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int ti
 
 int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout, char startByte, char endByte)
 {
-    auto* buf   = static_cast<char*>(buffer);
-    int   total = 0;
+    auto* buf = static_cast<char*>(buffer);
+    int total = 0;
 
     // Wait for start byte
     char byte = 0;
@@ -540,7 +551,7 @@ int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout
         if (byte == startByte)
         {
             buf[0] = byte;
-            total  = 1;
+            total = 1;
             break;
         }
     }
@@ -595,7 +606,7 @@ int serialPeek(int64_t handlePtr, void* outByte, int timeout)
     int r = serialRead(handlePtr, &handle->peek_char, 1, timeout, 1);
     if (r == 1)
     {
-        handle->has_peek           = true;
+        handle->has_peek = true;
         *static_cast<char*>(outByte) = handle->peek_char;
     }
     return r;
@@ -610,10 +621,10 @@ int serialDrain(int64_t handlePtr)
         return 0;
     }
 
-    if (!FlushFileBuffers(handle->handle))
+    if (FlushFileBuffers(handle->handle) == 0)
     {
         invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
         return 0;
     }
     return 1;
-} 
+}
