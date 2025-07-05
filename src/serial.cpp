@@ -365,41 +365,6 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
     return total;
 }
 
-// List available COM ports using QueryDosDevice
-int serialGetPortsInfo(void* buffer, int bufferSize, void* separatorPtr)
-{
-    const std::string_view sep{static_cast<const char*>(separatorPtr)};
-    std::string result;
-
-    constexpr int max_ports = 256;
-    char path_buf[256];
-
-    for (int i = 1; i <= max_ports; ++i)
-    {
-        std::string port = "COM" + std::to_string(i);
-        if (QueryDosDeviceA(port.c_str(), path_buf, sizeof(path_buf)) != 0u)
-        {
-            result += port;
-            result += sep;
-        }
-    }
-
-    if (!result.empty())
-    {
-        // Remove trailing separator
-        result.erase(result.size() - sep.size());
-    }
-
-    if (static_cast<int>(result.size()) + 1 > bufferSize)
-    {
-        invokeError(std::to_underlying(StatusCodes::BUFFER_ERROR), "serialGetPortsInfo: output buffer too small");
-        return 0;
-    }
-
-    std::memcpy(buffer, result.c_str(), result.size() + 1);
-    return result.empty() ? 0 : 1;
-}
-
 // -----------------------------------------------------------------------------
 // Buffer & abort helpers implementations
 // -----------------------------------------------------------------------------

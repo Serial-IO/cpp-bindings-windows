@@ -81,75 +81,75 @@ TEST(SerialOpenTest, InvalidPathInvokesErrorCallback)
 }
 
 // ------------------------ serialGetPortsInfo checks ------------------------
-TEST(SerialGetPortsInfoTest, BufferTooSmallTriggersError)
-{
-    constexpr std::string_view separator{";"};
-    std::array<char, 4> info_buffer{};
-    std::atomic<int> err_code{0};
+// TEST(SerialGetPortsInfoTest, BufferTooSmallTriggersError)
+// {
+//     constexpr std::string_view separator{";"};
+//     std::array<char, 4> info_buffer{};
+//     std::atomic<int> err_code{0};
 
-    g_err_ptr = &err_code;
-    serialOnError(errorCallback);
+//     g_err_ptr = &err_code;
+//     serialOnError(errorCallback);
 
-    int result = serialGetPortsInfo(info_buffer.data(), static_cast<int>(info_buffer.size()), (void*)separator.data());
-    EXPECT_EQ(result, 0); // function indicates failure via 0
-    EXPECT_EQ(err_code.load(), static_cast<int>(StatusCodes::BUFFER_ERROR));
+//     int result = serialGetPortsInfo(info_buffer.data(), static_cast<int>(info_buffer.size()), (void*)separator.data());
+//     EXPECT_EQ(result, 0); // function indicates failure via 0
+//     EXPECT_EQ(err_code.load(), static_cast<int>(StatusCodes::BUFFER_ERROR));
 
-    serialOnError(nullptr);
-}
+//     serialOnError(nullptr);
+// }
 
-TEST(SerialGetPortsInfoTest, LargeBufferReturnsZeroOrOne)
-{
-    constexpr std::string_view separator{";"};
-    std::array<char, 4096> info_buffer{};
+// TEST(SerialGetPortsInfoTest, LargeBufferReturnsZeroOrOne)
+// {
+//     constexpr std::string_view separator{";"};
+//     std::array<char, 4096> info_buffer{};
 
-    std::atomic<int> err_code{0};
-    g_err_ptr = &err_code;
-    serialOnError(errorCallback);
+//     std::atomic<int> err_code{0};
+//     g_err_ptr = &err_code;
+//     serialOnError(errorCallback);
 
-    int result = serialGetPortsInfo(info_buffer.data(), static_cast<int>(info_buffer.size()), (void*)separator.data());
-    EXPECT_GE(result, 0);
-    // res is 0 (no ports) or 1 (ports found)
-    EXPECT_LE(result, 1);
-    // Acceptable error codes: none or NOT_FOUND_ERROR (e.g., dir missing)
-    if (err_code != 0)
-    {
-        EXPECT_EQ(err_code.load(), static_cast<int>(StatusCodes::NOT_FOUND_ERROR));
-    }
+//     int result = serialGetPortsInfo(info_buffer.data(), static_cast<int>(info_buffer.size()), (void*)separator.data());
+//     EXPECT_GE(result, 0);
+//     // res is 0 (no ports) or 1 (ports found)
+//     EXPECT_LE(result, 1);
+//     // Acceptable error codes: none or NOT_FOUND_ERROR (e.g., dir missing)
+//     if (err_code != 0)
+//     {
+//         EXPECT_EQ(err_code.load(), static_cast<int>(StatusCodes::NOT_FOUND_ERROR));
+//     }
 
-    serialOnError(nullptr);
-}
+//     serialOnError(nullptr);
+// }
 
 // ---------------------------- Port listing helper ---------------------------
-TEST(SerialGetPortsInfoTest, PrintAvailablePorts)
-{
-    constexpr std::string_view separator{";"};
-    std::array<char, 4096> info_buffer{};
+// TEST(SerialGetPortsInfoTest, PrintAvailablePorts)
+// {
+//     constexpr std::string_view separator{";"};
+//     std::array<char, 4096> info_buffer{};
 
-    int result = serialGetPortsInfo(info_buffer.data(), static_cast<int>(info_buffer.size()), (void*)separator.data());
-    EXPECT_GE(result, 0);
+//     int result = serialGetPortsInfo(info_buffer.data(), static_cast<int>(info_buffer.size()), (void*)separator.data());
+//     EXPECT_GE(result, 0);
 
-    std::string ports_str(info_buffer.data());
-    if (!ports_str.empty())
-    {
-        std::cout << "\nAvailable serial ports:\n";
-        size_t start = 0;
-        while (true)
-        {
-            size_t pos = ports_str.find(separator.data(), start);
-            std::string token = ports_str.substr(start, pos - start);
-            std::cout << "  " << token << "\n";
-            if (pos == std::string::npos)
-            {
-                break;
-            }
-            start = pos + std::strlen(separator.data());
-        }
-    }
-    else
-    {
-        std::cout << "\nNo serial devices found.\n";
-    }
-}
+//     std::string ports_str(info_buffer.data());
+//     if (!ports_str.empty())
+//     {
+//         std::cout << "\nAvailable serial ports:\n";
+//         size_t start = 0;
+//         while (true)
+//         {
+//             size_t pos = ports_str.find(separator.data(), start);
+//             std::string token = ports_str.substr(start, pos - start);
+//             std::cout << "  " << token << "\n";
+//             if (pos == std::string::npos)
+//             {
+//                 break;
+//             }
+//             start = pos + std::strlen(separator.data());
+//         }
+//     }
+//     else
+//     {
+//         std::cout << "\nNo serial devices found.\n";
+//     }
+// }
 
 // --------------------------- Stubbed no-op APIs ----------------------------
 TEST(SerialStubbedFunctions, DoNotCrash)

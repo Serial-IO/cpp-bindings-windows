@@ -47,17 +47,18 @@ static void parseVidPidSerial(const std::string& src, std::string& vid, std::str
     }
 }
 
-extern "C" int serialGetPortsInfo_(void (*function)(const char* path,
-                                                    const char* manufacturer,
-                                                    const char* serialNumber,
-                                                    const char* pnpId,
-                                                    const char* locationId,
-                                                    const char* productId,
-                                                    const char* vendorId))
+extern "C" int serialGetPortsInfo(void (*function)(const char* port,
+                                                   const char* path,
+                                                   const char* manufacturer,
+                                                   const char* serialNumber,
+                                                   const char* pnpId,
+                                                   const char* locationId,
+                                                   const char* productId,
+                                                   const char* vendorId))
 {
     if (function == nullptr)
     {
-        invokeErrorLocal(std::to_underlying(StatusCodes::BUFFER_ERROR), "serialGetPortsInfo_: function pointer is null");
+        invokeErrorLocal(std::to_underlying(StatusCodes::BUFFER_ERROR), "serialGetPortsInfo: function pointer is null");
         return 0;
     }
 
@@ -66,7 +67,7 @@ extern "C" int serialGetPortsInfo_(void (*function)(const char* path,
     HDEVINFO h_dev_info = SetupDiGetClassDevs(&guid_devinterface_comport, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
     if (h_dev_info == INVALID_HANDLE_VALUE)
     {
-        invokeErrorLocal(std::to_underlying(StatusCodes::NOT_FOUND_ERROR), "serialGetPortsInfo_: SetupDiGetClassDevs failed");
+        invokeErrorLocal(std::to_underlying(StatusCodes::NOT_FOUND_ERROR), "serialGetPortsInfo: SetupDiGetClassDevs failed");
         return 0;
     }
 
@@ -97,6 +98,22 @@ extern "C" int serialGetPortsInfo_(void (*function)(const char* path,
 
         std::string device_path = detail->DevicePath;
 
+        // Friendly name (contains "(COMx)")
+        CHAR friendly[256] = "";
+        SetupDiGetDeviceRegistryPropertyA(
+            h_dev_info, &dev_info, SPDRP_FRIENDLYNAME, nullptr, reinterpret_cast<BYTE*>(friendly), sizeof(friendly), nullptr);
+
+        std::string com_name;
+        const char* paren = std::strchr(friendly, '(');
+        if (paren != nullptr)
+        {
+            const char* end_paren = std::strchr(paren, ')');
+            if (end_paren != nullptr && end_paren > paren + 1)
+            {
+                com_name.assign(paren + 1, static_cast<size_t>(end_paren - paren - 1));
+            }
+        }
+
         // Manufacturer
         CHAR mfg[256] = "";
         SetupDiGetDeviceRegistryPropertyA(h_dev_info, &dev_info, SPDRP_MFG, nullptr, reinterpret_cast<BYTE*>(mfg), sizeof(mfg), nullptr);
@@ -120,7 +137,8 @@ extern "C" int serialGetPortsInfo_(void (*function)(const char* path,
             parseVidPidSerial(device_path, vid, pid, serial);
         }
 
-        function(device_path.c_str(),
+        function(com_name.c_str(),
+                 device_path.c_str(),
                  (*mfg != 0) ? mfg : "",
                  serial.c_str(),
                  (hwid[0] != 0) ? hwid : "",

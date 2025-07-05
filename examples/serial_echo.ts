@@ -56,7 +56,7 @@ const dylib = Deno.dlopen(
             parameters: ["pointer", "pointer", "i32", "i32", "i32", "pointer"],
             result: "i32",
         },
-        serialGetPortsInfo_: { parameters: ["function"], result: "i32" },
+        serialGetPortsInfo: { parameters: ["function"], result: "i32" },
         serialClearBufferIn: { parameters: ["pointer"], result: "void" },
     } as const,
 );
@@ -65,6 +65,7 @@ const dylib = Deno.dlopen(
 // 1. List available ports (callback API)
 // -----------------------------------------------------------------------------
 interface PortInfo {
+    port: string;
     path: string;
     manufacturer: string;
     serial: string;
@@ -89,9 +90,11 @@ const collectCb = new Deno.UnsafeCallback({
         "pointer",
         "pointer",
         "pointer",
+        "pointer",
     ],
     result: "void",
 }, (
+    portPtr,
     pathPtr,
     manufacturerPtr,
     serialPtr,
@@ -101,6 +104,7 @@ const collectCb = new Deno.UnsafeCallback({
     vendorPtr,
 ) => {
     portInfos.push({
+        port: cstr(portPtr),
         path: cstr(pathPtr),
         manufacturer: cstr(manufacturerPtr),
         serial: cstr(serialPtr),
@@ -111,11 +115,11 @@ const collectCb = new Deno.UnsafeCallback({
     });
 });
 
-dylib.symbols.serialGetPortsInfo_(collectCb.pointer);
+dylib.symbols.serialGetPortsInfo(collectCb.pointer);
 
 console.log("Available ports:");
 for (const info of portInfos) {
-    console.log(` • ${info.path}  [${info.vendorId}:${info.productId}] ${info.manufacturer}`);
+    console.log(` • ${info.port}  [${info.vendorId}:${info.productId}] ${info.manufacturer}`);
 }
 
 if (portInfos.length === 0) {
@@ -126,7 +130,7 @@ if (portInfos.length === 0) {
 }
 
 // Convert to simple list of paths for later selection
-const ports = portInfos.map((i) => i.path);
+const ports = portInfos.map((i) => i.port);
 
 // -----------------------------------------------------------------------------
 // 2. Echo test on selected port
