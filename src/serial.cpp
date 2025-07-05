@@ -1,6 +1,7 @@
 #include "serial.h"
 
 #include "status_codes.h"
+#include "version_config.h"
 
 // Windows serial implementation
 // -----------------------------------------------------------------------------

@@ -1,4 +1,6 @@
 #pragma once
+#include "version_config.h"
+
 #include <cstdint>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -16,10 +18,7 @@ extern "C"
 {
 #endif
 
-    // Version helpers generated at configure time
-    MODULE_API unsigned int getMajorVersion();
-    MODULE_API unsigned int getMinorVersion();
-    MODULE_API unsigned int getPatchVersion();
+    MODULE_API void getVersion(Version* out);
 
     // Basic serial API
     MODULE_API intptr_t

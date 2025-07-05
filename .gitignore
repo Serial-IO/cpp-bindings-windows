@@ -1,5 +1,5 @@
 .vscode/
 build/
-src/version_config.cpp
+src/version_config.h
 .cache/
 compile_commands.json

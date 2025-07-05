@@ -1,0 +1,11 @@
+#pragma once
+
+extern "C"
+{
+    struct Version
+    {
+        unsigned int major{@VERSION_MAJOR@};
+        unsigned int minor{@VERSION_MINOR@};
+        unsigned int patch{@VERSION_PATCH@};
+    };
+}
