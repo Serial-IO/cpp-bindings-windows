@@ -45,7 +45,7 @@ struct SerialPortHandle
     std::atomic<bool> abort_write{false};
 };
 
-inline void invokeError(int code)
+void invokeError(int code)
 {
     if (error_callback != nullptr)
     {
@@ -54,7 +54,7 @@ inline void invokeError(int code)
 }
 
 // Convert baudrate integer to constant directly (Windows API accepts int)
-inline bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int stopBits)
+bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int stopBits)
 {
     DCB dcb{};
     dcb.DCBlength = sizeof(DCB);
@@ -97,7 +97,7 @@ inline bool configurePort(HANDLE h, int baudrate, int dataBits, int parity, int 
     return !(SetCommState(h, &dcb) == 0);
 }
 
-inline void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
+void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
 {
     COMMTIMEOUTS timeouts{};
 
@@ -127,7 +127,7 @@ inline void setPortTimeouts(HANDLE h, int readTimeoutMs, int writeTimeoutMs)
 }
 
 // Helper that adds the required "\\\\.\\" prefix for COM ports >= 10
-inline std::string toWinComPath(std::string_view port)
+std::string toWinComPath(std::string_view port)
 {
     std::string p(port);
     // If the path already starts with \\.\, leave it

@@ -11,26 +11,23 @@ on:
 jobs:
 
   build:
-    name: Cross-build Windows shared library (MinGW)
-    runs-on: ubuntu-latest
+    name: Build Windows shared library (g++/MinGW)
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install MinGW cross-compiler & build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64 cmake ninja-build make
+      - name: Setup MSYS2 with MinGW-w64 & build tools
+        run: echo "Using pre-installed Git for Windows g++ in PATH"
 
-      - name: Configure CMake (MinGW)
+      - name: Configure CMake (g++ / Ninja)
         run: |
-          cmake -S . -B build \
-                -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw64.cmake \
-                -DCMAKE_BUILD_TYPE=Release
-
+         cmake -S . -B build -G "Ninja" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release
+          
       - name: Compile
-        run: cmake --build build -j $(nproc)
+        run: cmake --build build
+
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4

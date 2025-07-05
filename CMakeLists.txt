@@ -94,3 +94,8 @@ add_custom_command(TARGET tests POST_BUILD
 
 enable_testing()
 add_test(NAME AllTests COMMAND tests COM3)
+
+if(MINGW)
+    # Statisch gegen stdc++, gcc linken und pthread als statisches Archiv
+    target_link_options(${PROJECT_N} PRIVATE -static -static-libstdc++ -static-libgcc -pthread)
+endif()

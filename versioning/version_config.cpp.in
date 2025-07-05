@@ -1,3 +1,5 @@
+#include "serial.h"
+
 unsigned int getMajorVersion()
 {
     return @VERSION_MAJOR@;
