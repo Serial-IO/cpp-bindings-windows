@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 
-set(VERSION_MAJOR 0)
-set(VERSION_MINOR 2)
+set(VERSION_MAJOR 1)
+set(VERSION_MINOR 0)
 set(VERSION_PATCH 0)
 
 set(PROJECT_N cpp_windows_bindings)
