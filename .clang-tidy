@@ -25,6 +25,6 @@ CheckOptions:
   - key:             readability-identifier-naming.PrivateMemberPrefix
     value:           '_'
   - key:             readability-function-size.ParameterThreshold
-    value:           '8'
+    value:           '12'
   - key:             readability-braces-around-statements.ShortStatementLines
     value:           '0'

@@ -14,13 +14,12 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 #include <windows.h>
 
 // -----------------------------------------------------------------------------
 // Global callback function pointers (default nullptr)
 // -----------------------------------------------------------------------------
-void (*error_callback)(int) = nullptr;
+void (*error_callback)(int, const char*) = nullptr;
 void (*read_callback)(int) = nullptr;
 void (*write_callback)(int) = nullptr;
 
@@ -45,11 +44,11 @@ struct SerialPortHandle
     std::atomic<bool> abort_write{false};
 };
 
-void invokeError(int code)
+void invokeError(int code, const char* message)
 {
     if (error_callback != nullptr)
     {
-        error_callback(code);
+        error_callback(code, message);
     }
 }
 
@@ -149,7 +148,7 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
 {
     if (port == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialOpen: port parameter is null");
         return 0;
     }
 
@@ -166,7 +165,7 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
 
     if (h == INVALID_HANDLE_VALUE)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialOpen: CreateFileA failed (INVALID_HANDLE_VALUE)");
         return 0;
     }
 
@@ -175,7 +174,7 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
     original.DCBlength = sizeof(DCB);
     if (GetCommState(h, &original) == 0)
     {
-        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR), "serialOpen: GetCommState failed");
         CloseHandle(h);
         return 0;
     }
@@ -183,7 +182,7 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
     // Configure DCB with requested settings
     if (!configurePort(h, baudrate, dataBits, parity, stopBits))
     {
-        invokeError(std::to_underlying(StatusCodes::SET_STATE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::SET_STATE_ERROR), "serialOpen: configurePort failed");
         CloseHandle(h);
         return 0;
     }
@@ -220,7 +219,7 @@ static int readFromPort(SerialPortHandle* handle, void* buffer, int bufferSize, 
 {
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "readFromPort: handle pointer is null");
         return 0;
     }
 
@@ -235,7 +234,7 @@ static int readFromPort(SerialPortHandle* handle, void* buffer, int bufferSize, 
     BOOL ok = ReadFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytes_read, nullptr);
     if (ok == 0)
     {
-        invokeError(std::to_underlying(StatusCodes::READ_ERROR));
+        invokeError(std::to_underlying(StatusCodes::READ_ERROR), "readFromPort: ReadFile failed");
         return 0;
     }
 
@@ -255,7 +254,7 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
 {
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "writeToPort: handle pointer is null");
         return 0;
     }
 
@@ -270,7 +269,7 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
     BOOL ok = WriteFile(handle->handle, buffer, static_cast<DWORD>(bufferSize), &bytes_written, nullptr);
     if (ok == 0)
     {
-        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR), "writeToPort: WriteFile failed");
         return 0;
     }
 
@@ -293,7 +292,7 @@ int serialRead(int64_t handlePtr, void* buffer, int bufferSize, int timeout, int
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialRead: handle pointer is null");
         return 0;
     }
 
@@ -336,7 +335,7 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntil: handle pointer is null");
         return 0;
     }
 
@@ -393,7 +392,7 @@ int serialGetPortsInfo(void* buffer, int bufferSize, void* separatorPtr)
 
     if (static_cast<int>(result.size()) + 1 > bufferSize)
     {
-        invokeError(std::to_underlying(StatusCodes::BUFFER_ERROR));
+        invokeError(std::to_underlying(StatusCodes::BUFFER_ERROR), "serialGetPortsInfo: output buffer too small");
         return 0;
     }
 
@@ -448,10 +447,6 @@ void serialAbortWrite(int64_t handlePtr)
 // Callback registration
 // -----------------------------------------------------------------------------
 
-void serialOnError(void (*func)(int code))
-{
-    error_callback = func;
-}
 void serialOnRead(void (*func)(int bytes))
 {
     read_callback = func;
@@ -459,6 +454,10 @@ void serialOnRead(void (*func)(int bytes))
 void serialOnWrite(void (*func)(int bytes))
 {
     write_callback = func;
+}
+void serialOnError(void (*func)(int code, const char* message))
+{
+    error_callback = func;
 }
 
 // -----------------------------------------------------------------------------
@@ -492,7 +491,7 @@ int serialReadUntilToken(int64_t handlePtr, void* buffer, int bufferSize, int ti
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialReadUntilToken: handle pointer is null");
         return 0;
     }
 
@@ -593,7 +592,7 @@ int serialPeek(int64_t handlePtr, void* outByte, int timeout)
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr || outByte == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialPeek: handle or outByte pointer is null");
         return 0;
     }
 
@@ -617,13 +616,13 @@ int serialDrain(int64_t handlePtr)
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialDrain: handle pointer is null");
         return 0;
     }
 
     if (FlushFileBuffers(handle->handle) == 0)
     {
-        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::WRITE_ERROR), "serialDrain: FlushFileBuffers failed");
         return 0;
     }
     return 1;
@@ -638,7 +637,7 @@ int serialInWaiting(int64_t handlePtr)
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialInWaiting: handle pointer is null");
         return 0;
     }
 
@@ -646,7 +645,7 @@ int serialInWaiting(int64_t handlePtr)
     DWORD errors = 0;
     if (ClearCommError(handle->handle, &errors, &status) == 0)
     {
-        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR), "serialInWaiting: ClearCommError failed");
         return 0;
     }
     return static_cast<int>(status.cbInQue);
@@ -657,7 +656,7 @@ int serialOutWaiting(int64_t handlePtr)
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
     if (handle == nullptr)
     {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialOutWaiting: handle pointer is null");
         return 0;
     }
 
@@ -665,7 +664,7 @@ int serialOutWaiting(int64_t handlePtr)
     DWORD errors = 0;
     if (ClearCommError(handle->handle, &errors, &status) == 0)
     {
-        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
+        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR), "serialOutWaiting: ClearCommError failed");
         return 0;
     }
     return static_cast<int>(status.cbOutQue);

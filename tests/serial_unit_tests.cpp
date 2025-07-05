@@ -17,7 +17,7 @@ namespace
 // Helper storage for callback tests
 std::atomic<int>* g_err_ptr = nullptr;
 
-void errorCallback(int code)
+void errorCallback(int code, const char* /*msg*/)
 {
     if (g_err_ptr != nullptr)
     {

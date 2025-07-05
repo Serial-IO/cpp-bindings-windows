@@ -35,19 +35,32 @@ extern "C"
 
     MODULE_API int serialGetPortsInfo(void* buffer, int bufferSize, void* separator);
 
+    // Enumerate COM ports and forward detailed information through a callback.
+    // Each detected port triggers exactly one call to `function` with null-terminated
+    // strings (may be empty) for:
+    //   path, manufacturer, serialNumber, pnpId, locationId, productId, vendorId
+    // The function returns the number of ports found (0 on error).
+    MODULE_API int serialGetPortsInfo_(void (*function)(const char* path,
+                                                        const char* manufacturer,
+                                                        const char* serialNumber,
+                                                        const char* pnpId,
+                                                        const char* locationId,
+                                                        const char* productId,
+                                                        const char* vendorId));
+
     MODULE_API void serialClearBufferIn(int64_t handle);
     MODULE_API void serialClearBufferOut(int64_t handle);
     MODULE_API void serialAbortRead(int64_t handle);
     MODULE_API void serialAbortWrite(int64_t handle);
 
     // Optional callback hooks (can be nullptr)
-    extern void (*error_callback)(int errorCode);
     extern void (*read_callback)(int bytes);
     extern void (*write_callback)(int bytes);
+    extern void (*error_callback)(int errorCode, const char* message);
 
-    MODULE_API void serialOnError(void (*func)(int code));
     MODULE_API void serialOnRead(void (*func)(int bytes));
     MODULE_API void serialOnWrite(void (*func)(int bytes));
+    MODULE_API void serialOnError(void (*func)(int code, const char* message));
 
     MODULE_API int serialReadLine(int64_t handle, void* buffer, int bufferSize, int timeout /*ms*/);
 

@@ -98,4 +98,6 @@ add_test(NAME AllTests COMMAND tests COM3)
 if(MINGW)
     # Statisch gegen stdc++, gcc linken und pthread als statisches Archiv
     target_link_options(${PROJECT_N} PRIVATE -static -static-libstdc++ -static-libgcc -pthread)
+    # Windows SetupAPI for serial port enumeration
+    target_link_libraries(${PROJECT_N} PRIVATE setupapi)
 endif()

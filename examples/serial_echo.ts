@@ -56,33 +56,77 @@ const dylib = Deno.dlopen(
             parameters: ["pointer", "pointer", "i32", "i32", "i32", "pointer"],
             result: "i32",
         },
-        serialGetPortsInfo: { parameters: ["pointer", "i32", "pointer"], result: "i32" },
+        serialGetPortsInfo_: { parameters: ["function"], result: "i32" },
         serialClearBufferIn: { parameters: ["pointer"], result: "void" },
     } as const,
 );
 
 // -----------------------------------------------------------------------------
-// 1. List available ports
+// 1. List available ports (callback API)
 // -----------------------------------------------------------------------------
-const sepBuf = cString(";");
-const portsBuf = new Uint8Array(4096);
-dylib.symbols.serialGetPortsInfo(
-    pointer(portsBuf),
-    portsBuf.length,
-    pointer(sepBuf),
-);
-
-const cPortsStr = decoder.decode(portsBuf.subarray(0, portsBuf.indexOf(0)));
-const ports = cPortsStr ? cPortsStr.split(";") : [];
-console.log("Available ports:");
-for (const p of ports) {
-    console.log(" •", p);
+interface PortInfo {
+    path: string;
+    manufacturer: string;
+    serial: string;
+    pnpId: string;
+    location: string;
+    productId: string;
+    vendorId: string;
 }
-if (ports.length === 0) {
-    console.error("No serial ports found (ttyUSB). Exiting.");
+
+function cstr(ptr: Deno.UnsafePointer): string {
+    return new Deno.UnsafePointerView(ptr).getCString();
+}
+
+const portInfos: PortInfo[] = [];
+
+const collectCb = new Deno.UnsafeCallback({
+    parameters: [
+        "pointer",
+        "pointer",
+        "pointer",
+        "pointer",
+        "pointer",
+        "pointer",
+        "pointer",
+    ],
+    result: "void",
+}, (
+    pathPtr,
+    manufacturerPtr,
+    serialPtr,
+    pnpPtr,
+    locationPtr,
+    productPtr,
+    vendorPtr,
+) => {
+    portInfos.push({
+        path: cstr(pathPtr),
+        manufacturer: cstr(manufacturerPtr),
+        serial: cstr(serialPtr),
+        pnpId: cstr(pnpPtr),
+        location: cstr(locationPtr),
+        productId: cstr(productPtr),
+        vendorId: cstr(vendorPtr),
+    });
+});
+
+dylib.symbols.serialGetPortsInfo_(collectCb.pointer);
+
+console.log("Available ports:");
+for (const info of portInfos) {
+    console.log(` • ${info.path}  [${info.vendorId}:${info.productId}] ${info.manufacturer}`);
+}
+
+if (portInfos.length === 0) {
+    console.error("No serial ports found. Exiting.");
+    collectCb.close();
     dylib.close();
     Deno.exit(1);
 }
+
+// Convert to simple list of paths for later selection
+const ports = portInfos.map((i) => i.path);
 
 // -----------------------------------------------------------------------------
 // 2. Echo test on selected port
@@ -135,4 +179,5 @@ if (echo === msg) {
 }
 
 dylib.symbols.serialClose(handle);
+collectCb.close();
 dylib.close(); 
