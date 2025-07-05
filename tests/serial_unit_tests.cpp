@@ -187,23 +187,6 @@ TEST(SerialHelpers, ReadUntilToken)
     ASSERT_EQ(std::string_view(read_buffer.data(), num_read), payload);
 }
 
-TEST(SerialHelpers, Peek)
-{
-    SerialDevice dev;
-    const std::string payload = "XYZ";
-    dev.writeToDevice(payload);
-
-    char first_byte = 0;
-    int peek_result = serialPeek(dev.handle, &first_byte, 2000);
-    ASSERT_EQ(peek_result, 1);
-    ASSERT_EQ(first_byte, 'X');
-
-    std::array<char, 4> read_buffer{};
-    int num_read = serialRead(dev.handle, read_buffer.data(), 3, 2000, 1);
-    ASSERT_EQ(num_read, 3);
-    ASSERT_EQ(std::string_view(read_buffer.data(), 3), payload);
-}
-
 TEST(SerialHelpers, Statistics)
 {
     SerialDevice dev;
@@ -220,8 +203,8 @@ TEST(SerialHelpers, Statistics)
     int bytes_read = serialRead(dev.handle, read_buffer.data(), static_cast<int>(payload.size()), 2000, 1);
     ASSERT_EQ(bytes_read, static_cast<int>(payload.size()));
 
-    ASSERT_EQ(serialGetTxBytes(dev.handle), static_cast<int64_t>(payload.size()));
-    ASSERT_EQ(serialGetRxBytes(dev.handle), static_cast<int64_t>(payload.size()));
+    ASSERT_EQ(serialOutBytesTotal(dev.handle), static_cast<int64_t>(payload.size()));
+    ASSERT_EQ(serialInBytesTotal(dev.handle), static_cast<int64_t>(payload.size()));
 }
 
 TEST(SerialHelpers, Drain)

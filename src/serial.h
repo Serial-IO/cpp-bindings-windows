@@ -50,9 +50,9 @@ extern "C"
     MODULE_API void serialAbortWrite(int64_t handle);
 
     // Optional callback hooks (can be nullptr)
-    extern void (*read_callback)(int bytes);
-    extern void (*write_callback)(int bytes);
-    extern void (*error_callback)(int errorCode, const char* message);
+    extern void (*on_read_callback)(int bytes);
+    extern void (*on_write_callback)(int bytes);
+    extern void (*on_error_callback)(int errorCode, const char* message);
 
     MODULE_API void serialOnRead(void (*func)(int bytes));
     MODULE_API void serialOnWrite(void (*func)(int bytes));

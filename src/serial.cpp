@@ -19,9 +19,9 @@
 // -----------------------------------------------------------------------------
 // Global callback function pointers (default nullptr)
 // -----------------------------------------------------------------------------
-void (*error_callback)(int, const char*) = nullptr;
-void (*read_callback)(int) = nullptr;
-void (*write_callback)(int) = nullptr;
+void (*on_error_callback)(int, const char*) = nullptr;
+void (*on_read_callback)(int) = nullptr;
+void (*on_write_callback)(int) = nullptr;
 
 // -----------------------------------------------------------------------------
 // Internal helpers & types
@@ -43,9 +43,9 @@ struct SerialPortHandle
 
 void invokeError(int code, const char* message)
 {
-    if (error_callback != nullptr)
+    if (on_error_callback != nullptr)
     {
-        error_callback(code, message);
+        on_error_callback(code, message);
     }
 }
 
@@ -238,9 +238,9 @@ static int readFromPort(SerialPortHandle* handle, void* buffer, int bufferSize, 
     if (bytes_read > 0)
     {
         handle->rx_total += bytes_read;
-        if (read_callback != nullptr)
+        if (on_read_callback != nullptr)
         {
-            read_callback(static_cast<int>(bytes_read));
+            on_read_callback(static_cast<int>(bytes_read));
         }
     }
 
@@ -273,9 +273,9 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
     if (bytes_written > 0)
     {
         handle->tx_total += bytes_written;
-        if (write_callback != nullptr)
+        if (on_write_callback != nullptr)
         {
-            write_callback(static_cast<int>(bytes_written));
+            on_write_callback(static_cast<int>(bytes_written));
         }
     }
 
@@ -333,9 +333,9 @@ int serialReadUntil(int64_t handlePtr, void* buffer, int bufferSize, int timeout
         total += r;
     }
 
-    if (read_callback != nullptr)
+    if (on_read_callback != nullptr)
     {
-        read_callback(total);
+        on_read_callback(total);
     }
     return total;
 }
@@ -380,9 +380,9 @@ int serialReadUntilSequence(int64_t handlePtr, void* buffer, int bufferSize, int
         total += r;
     }
 
-    if (read_callback != nullptr)
+    if (on_read_callback != nullptr)
     {
-        read_callback(total);
+        on_read_callback(total);
     }
     return total;
 }
@@ -435,15 +435,15 @@ void serialAbortWrite(int64_t handlePtr)
 
 void serialOnRead(void (*func)(int bytes))
 {
-    read_callback = func;
+    on_read_callback = func;
 }
 void serialOnWrite(void (*func)(int bytes))
 {
-    write_callback = func;
+    on_write_callback = func;
 }
 void serialOnError(void (*func)(int code, const char* message))
 {
-    error_callback = func;
+    on_error_callback = func;
 }
 
 // -----------------------------------------------------------------------------

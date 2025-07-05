@@ -16,9 +16,9 @@
 
 static void invokeErrorLocal(int code, const char* message)
 {
-    if (error_callback != nullptr)
+    if (on_error_callback != nullptr)
     {
-        error_callback(code, message);
+        on_error_callback(code, message);
     }
 }
 
