@@ -7,7 +7,7 @@ interface CliOptions {
 }
 
 function parseArgs(): CliOptions {
-    const opts: CliOptions = { lib: "./build/libcpp_unix_bindings.so" };
+    const opts: CliOptions = { lib: "./build/libcpp_windows_bindings.dll" };
 
     for (let i = 0; i < Deno.args.length; ++i) {
         const arg = Deno.args[i];
@@ -57,6 +57,7 @@ const dylib = Deno.dlopen(
             result: "i32",
         },
         serialGetPortsInfo: { parameters: ["pointer", "i32", "pointer"], result: "i32" },
+        serialClearBufferIn: { parameters: ["pointer"], result: "void" },
     } as const,
 );
 
@@ -99,6 +100,9 @@ if (handle === null) {
 
 // Give MCU a moment to reboot (similar to C++ tests)
 await new Promise((r) => setTimeout(r, 2000));
+
+// Flush any leftover bytes the MCU might have sent during reset
+dylib.symbols.serialClearBufferIn(handle);
 
 const msg = "HELLO\n";
 const msgBuf = encoder.encode(msg);

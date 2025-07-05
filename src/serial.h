@@ -67,6 +67,10 @@ extern "C"
     // Drain pending TX bytes (wait until sent)
     MODULE_API int serialDrain(int64_t handle);
 
+    // Bytes currently queued in the driver buffers
+    MODULE_API int serialInWaiting(int64_t handle);
+    MODULE_API int serialOutWaiting(int64_t handle);
+
 #ifdef __cplusplus
 }
 #endif

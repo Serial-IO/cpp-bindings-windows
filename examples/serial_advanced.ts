@@ -17,7 +17,7 @@ interface CliOptions {
 }
 
 function parseArgs(): CliOptions {
-    const opts: CliOptions = { lib: "./build/libcpp_unix_bindings.so" };
+    const opts: CliOptions = { lib: "./build/libcpp_windows_bindings.dll" };
 
     for (let i = 0; i < Deno.args.length; ++i) {
         const arg = Deno.args[i];
@@ -66,6 +66,8 @@ const dylib = Deno.dlopen(
         serialDrain: { parameters: ["pointer"], result: "i32" },
         serialGetTxBytes: { parameters: ["pointer"], result: "i64" },
         serialGetRxBytes: { parameters: ["pointer"], result: "i64" },
+        serialInWaiting: { parameters: ["pointer"], result: "i32" },
+        serialOutWaiting: { parameters: ["pointer"], result: "i32" },
     } as const,
 );
 
@@ -126,6 +128,13 @@ if (dylib.symbols.serialDrain(handle) === 1) {
 const txBytes = Number(dylib.symbols.serialGetTxBytes(handle));
 const rxBytes = Number(dylib.symbols.serialGetRxBytes(handle));
 console.log(`\nStatistics -> TX: ${txBytes} bytes, RX: ${rxBytes} bytes`);
+
+// -----------------------------------------------------------------------------
+// Additional statistics
+// -----------------------------------------------------------------------------
+const rxQueued = dylib.symbols.serialInWaiting(handle);
+const txQueued = dylib.symbols.serialOutWaiting(handle);
+console.log(`RX queued: ${rxQueued},  TX queued: ${txQueued}`);
 
 // -----------------------------------------------------------------------------
 // Cleanup

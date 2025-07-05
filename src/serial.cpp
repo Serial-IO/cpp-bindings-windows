@@ -628,3 +628,45 @@ int serialDrain(int64_t handlePtr)
     }
     return 1;
 }
+
+// -----------------------------------------------------------------------------
+// Buffer occupancy helpers (similar to PySerial in_waiting / out_waiting)
+// -----------------------------------------------------------------------------
+
+int serialInWaiting(int64_t handlePtr)
+{
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
+    if (handle == nullptr)
+    {
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        return 0;
+    }
+
+    COMSTAT status{};
+    DWORD errors = 0;
+    if (ClearCommError(handle->handle, &errors, &status) == 0)
+    {
+        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
+        return 0;
+    }
+    return static_cast<int>(status.cbInQue);
+}
+
+int serialOutWaiting(int64_t handlePtr)
+{
+    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
+    if (handle == nullptr)
+    {
+        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
+        return 0;
+    }
+
+    COMSTAT status{};
+    DWORD errors = 0;
+    if (ClearCommError(handle->handle, &errors, &status) == 0)
+    {
+        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
+        return 0;
+    }
+    return static_cast<int>(status.cbOutQue);
+}
