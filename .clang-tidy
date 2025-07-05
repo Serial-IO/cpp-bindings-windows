@@ -1,0 +1,30 @@
+Checks: >
+  -*,
+  readability-* ,
+  modernize-* ,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+
+WarningsAsErrors: >
+  bugprone-* ,
+  performance-* ,
+  clang-analyzer-*
+
+HeaderFilterRegex: 'src/.*'
+FormatStyle: file
+
+CheckOptions:
+  - key:             modernize-use-auto.MinTypeNameLength
+    value:           '5'
+  - key:             modernize-use-auto.RemoveStars
+    value:           'false'
+  - key:             readability-identifier-naming.VariableCase
+    value:           lower_case
+  - key:             readability-identifier-naming.MemberCase
+    value:           lower_case
+  - key:             readability-identifier-naming.PrivateMemberPrefix
+    value:           '_'
+  - key:             readability-function-size.ParameterThreshold
+    value:           '8'
+  - key:             readability-braces-around-statements.ShortStatementLines
+    value:           '0'
