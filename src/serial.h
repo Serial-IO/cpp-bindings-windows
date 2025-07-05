@@ -18,7 +18,7 @@ extern "C"
 {
 #endif
 
-    MODULE_API void getVersion(Version* out);
+    MODULE_API void getVersion(Version out);
 
     // Basic serial API
     MODULE_API intptr_t

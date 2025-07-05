@@ -7,14 +7,11 @@ extern "C"
 {
 #endif
 
-    static const Version version = {};
+    static const Version version{};
 
-    void getVersion(Version* out)
+    void getVersion(Version out)
     {
-        if (out != nullptr)
-        {
-            *out = version;
-        }
+        out = version;
     }
 
 #ifdef __cplusplus
