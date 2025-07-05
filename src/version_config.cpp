@@ -9,9 +9,9 @@ extern "C"
 
     static const Version version{};
 
-    void getVersion(Version out)
+    Version getVersion()
     {
-        out = version;
+        return version;
     }
 
 #ifdef __cplusplus
