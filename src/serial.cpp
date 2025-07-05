@@ -34,8 +34,8 @@ struct SerialPortHandle
     HANDLE handle{INVALID_HANDLE_VALUE};
     DCB original_dcb{}; // keep original settings so we can restore on close
 
-    int64_t rx_total{0}; // bytes received so far
-    int64_t tx_total{0}; // bytes transmitted so far
+    int64_t in_total{0};  // bytes received so far
+    int64_t out_total{0}; // bytes transmitted so far
 
     std::atomic<bool> abort_read{false};
     std::atomic<bool> abort_write{false};
@@ -123,16 +123,16 @@ void setPortTimeouts(HANDLE handle, int readTimeoutMs, int writeTimeoutMs)
 }
 
 // Helper that adds the required "\\\\.\\" prefix for COM ports >= 10
-std::string toWinComPath(std::string_view port)
+std::string toWinComPath(std::string_view portView)
 {
-    std::string p(port);
+    std::string port(portView);
     // If the path already starts with \\.\, leave it
-    if (p.starts_with(R"(\\.\)"))
+    if (port.starts_with(R"(\\.\)"))
     {
-        return p;
+        return port;
     }
     // Prepend prefix so Windows can open COM10+
-    return R"(\\.\)" + p;
+    return R"(\\.\)" + port;
 }
 
 } // namespace
@@ -152,15 +152,15 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
     std::string_view port_name_view{static_cast<const char*>(port)};
     std::string win_port = toWinComPath(port_name_view);
 
-    HANDLE h = CreateFileA(win_port.c_str(),
-                           GENERIC_READ | GENERIC_WRITE,
-                           0, // exclusive access
-                           nullptr,
-                           OPEN_EXISTING,
-                           FILE_ATTRIBUTE_NORMAL,
-                           nullptr);
+    HANDLE raw_handle = CreateFileA(win_port.c_str(),
+                                    GENERIC_READ | GENERIC_WRITE,
+                                    0, // exclusive access
+                                    nullptr,
+                                    OPEN_EXISTING,
+                                    FILE_ATTRIBUTE_NORMAL,
+                                    nullptr);
 
-    if (h == INVALID_HANDLE_VALUE)
+    if (raw_handle == INVALID_HANDLE_VALUE)
     {
         invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR), "serialOpen: CreateFileA failed (INVALID_HANDLE_VALUE)");
         return 0;
@@ -169,26 +169,26 @@ intptr_t serialOpen(void* port, int baudrate, int dataBits, int parity, int stop
     // Save original DCB first
     DCB original{};
     original.DCBlength = sizeof(DCB);
-    if (GetCommState(h, &original) == 0)
+    if (GetCommState(raw_handle, &original) == 0)
     {
         invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR), "serialOpen: GetCommState failed");
-        CloseHandle(h);
+        CloseHandle(raw_handle);
         return 0;
     }
 
     // Configure DCB with requested settings
-    if (!configurePort(h, baudrate, dataBits, parity, stopBits))
+    if (!configurePort(raw_handle, baudrate, dataBits, parity, stopBits))
     {
         invokeError(std::to_underlying(StatusCodes::SET_STATE_ERROR), "serialOpen: configurePort failed");
-        CloseHandle(h);
+        CloseHandle(raw_handle);
         return 0;
     }
 
     // Default timeouts – can be overridden per read/write call
-    setPortTimeouts(h, 1000, 1000);
+    setPortTimeouts(raw_handle, 1000, 1000);
 
     auto* handle = new SerialPortHandle{};
-    handle->handle = h;
+    handle->handle = raw_handle;
     handle->original_dcb = original;
 
     return reinterpret_cast<intptr_t>(handle);
@@ -237,7 +237,7 @@ static int readFromPort(SerialPortHandle* handle, void* buffer, int bufferSize, 
 
     if (bytes_read > 0)
     {
-        handle->rx_total += bytes_read;
+        handle->in_total += bytes_read;
         if (on_read_callback != nullptr)
         {
             on_read_callback(static_cast<int>(bytes_read));
@@ -272,7 +272,7 @@ static int writeToPort(SerialPortHandle* handle, const void* buffer, int bufferS
 
     if (bytes_written > 0)
     {
-        handle->tx_total += bytes_written;
+        handle->out_total += bytes_written;
         if (on_write_callback != nullptr)
         {
             on_write_callback(static_cast<int>(bytes_written));
@@ -433,17 +433,17 @@ void serialAbortWrite(int64_t handlePtr)
 // Callback registration
 // -----------------------------------------------------------------------------
 
-void serialOnRead(void (*func)(int bytes))
+void serialOnRead(void (*callbackFn)(int bytes))
 {
-    on_read_callback = func;
+    on_read_callback = callbackFn;
 }
-void serialOnWrite(void (*func)(int bytes))
+void serialOnWrite(void (*callbackFn)(int bytes))
 {
-    on_write_callback = func;
+    on_write_callback = callbackFn;
 }
-void serialOnError(void (*func)(int code, const char* message))
+void serialOnError(void (*callbackFn)(int code, const char* message))
 {
-    on_error_callback = func;
+    on_error_callback = callbackFn;
 }
 
 // -----------------------------------------------------------------------------
@@ -517,13 +517,13 @@ int serialReadFrame(int64_t handlePtr, void* buffer, int bufferSize, int timeout
 int64_t serialOutBytesTotal(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    return (handle != nullptr) ? handle->rx_total : 0;
+    return (handle != nullptr) ? handle->in_total : 0;
 }
 
 int64_t serialInBytesTotal(int64_t handlePtr)
 {
     auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    return (handle != nullptr) ? handle->tx_total : 0;
+    return (handle != nullptr) ? handle->out_total : 0;
 }
 
 int serialDrain(int64_t handlePtr)
