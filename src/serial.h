@@ -1,12 +1,7 @@
 #pragma once
 #include <cstdint>
 
-// Export definitions based on platform
-#ifdef _WIN32
-#    define MODULE_API __declspec(dllexport)
-#else
-#    define MODULE_API __attribute__((visibility("default")))
-#endif
+#define MODULE_API __declspec(dllexport)
 
 #ifdef __cplusplus
 extern "C"

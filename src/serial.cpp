@@ -131,7 +131,7 @@ inline std::string toWinComPath(std::string_view port)
 {
     std::string p(port);
     // If the path already starts with \\.\, leave it
-    if (p.starts_with("\\\\.\\"))
+    if (p.starts_with(R"(\\.\)"))
     {
         return p;
     }
