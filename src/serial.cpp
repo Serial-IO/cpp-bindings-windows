@@ -670,23 +670,3 @@ int serialOutWaiting(int64_t handlePtr)
     }
     return static_cast<int>(status.cbOutQue);
 }
-
-int serialIsReady(int64_t handlePtr)
-{
-    auto* handle = reinterpret_cast<SerialPortHandle*>(handlePtr);
-    if (handle == nullptr)
-    {
-        invokeError(std::to_underlying(StatusCodes::INVALID_HANDLE_ERROR));
-        return 0;
-    }
-
-    DWORD modem_status = 0;
-    if (GetCommModemStatus(handle->handle, &modem_status) == 0)
-    {
-        invokeError(std::to_underlying(StatusCodes::GET_STATE_ERROR));
-        return 0;
-    }
-
-    bool ready = (modem_status & MS_DSR_ON) || (modem_status & MS_CTS_ON) || (modem_status & MS_RLSD_ON);
-    return ready ? 1 : 0;
-}

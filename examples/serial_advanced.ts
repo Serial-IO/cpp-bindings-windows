@@ -68,6 +68,11 @@ const dylib = Deno.dlopen(
         serialGetRxBytes: { parameters: ["pointer"], result: "i64" },
         serialInWaiting: { parameters: ["pointer"], result: "i32" },
         serialOutWaiting: { parameters: ["pointer"], result: "i32" },
+        serialOnError: {
+            parameters: ["function"],
+            result: "void",
+            nonblocking: true,
+        },
     } as const,
 );
 
@@ -140,5 +145,15 @@ console.log(`RX queued: ${rxQueued},  TX queued: ${txQueued}`);
 // Cleanup
 // -----------------------------------------------------------------------------
 dylib.symbols.serialClose(handle);
+dylib.symbols.serialOnError(0);
+
+// Signatur: (int code) -> void
+const errorCallback = new Deno.UnsafeCallback(
+    { parameters: ["i32"], result: "void" },
+    (code: number) => {
+        console.error(`Serial-Error! Code = ${code}`);
+    },
+);
+errorCallback.close();
 dylib.close();
 console.log("Done."); 

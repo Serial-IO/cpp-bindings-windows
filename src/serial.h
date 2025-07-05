@@ -71,9 +71,6 @@ extern "C"
     MODULE_API int serialInWaiting(int64_t handle);
     MODULE_API int serialOutWaiting(int64_t handle);
 
-    // Query modem status lines (e.g., DSR/CTS) – returns 1 if device signals ready, 0 otherwise
-    MODULE_API int serialIsReady(int64_t handle);
-
 #ifdef __cplusplus
 }
 #endif
