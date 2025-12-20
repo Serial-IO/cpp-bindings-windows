@@ -1,0 +1,44 @@
+name: Deno Integration Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  deno-tests:
+    name: Deno integration tests (deno ${{ matrix.deno }})
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        deno: ["2.6.0", "2.5.0"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup CMake >= 3.30
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: "3.31.x"
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ matrix.deno }}
+
+      - name: Configure CMake (Release)
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build (Release)
+        run: |
+          cmake --build build --config Release
+
+      - name: Run Deno integration tests
+        working-directory: integration_tests
+        run: |
+          deno task test
+
+
