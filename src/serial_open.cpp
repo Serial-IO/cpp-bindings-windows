@@ -25,14 +25,22 @@ auto normalizePortPath(const wchar_t *port) -> std::wstring
     return p;
 }
 
-auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, int parity, int stop_bits) -> bool
+struct ApplyLineSettingsResult
+{
+    cpp_core::StatusCodes code;
+    std::string message;
+};
+
+auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, int parity, int stop_bits) -> ApplyLineSettingsResult
 {
     DCB dcb = {};
     dcb.DCBlength = sizeof(DCB);
 
     if (GetCommState(handle, &dcb) == 0)
     {
-        return false;
+        const DWORD err = GetLastError();
+        return {.code = cpp_core::StatusCodes::kGetStateError,
+                .message = "GetCommState failed: " + cpp_bindings_windows::detail::win32ErrorToString(err)};
     }
 
     dcb.BaudRate = static_cast<DWORD>(baudrate);
@@ -65,7 +73,7 @@ auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, int parity, i
         break;
     default:
         SetLastError(ERROR_INVALID_PARAMETER);
-        return false;
+        return {.code = cpp_core::StatusCodes::kSetStateError, .message = "Invalid parity"};
     }
 
     // stop_bits mapping:
@@ -82,12 +90,14 @@ auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, int parity, i
     else
     {
         SetLastError(ERROR_INVALID_PARAMETER);
-        return false;
+        return {.code = cpp_core::StatusCodes::kSetStateError, .message = "Invalid stop bits: must be 0, 1, or 2"};
     }
 
     if (SetCommState(handle, &dcb) == 0)
     {
-        return false;
+        const DWORD err = GetLastError();
+        return {.code = cpp_core::StatusCodes::kSetStateError,
+                .message = "SetCommState failed: " + cpp_bindings_windows::detail::win32ErrorToString(err)};
     }
 
     // Use overlapped operations + explicit waits in read/write, so keep
@@ -95,10 +105,12 @@ auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, int parity, i
     COMMTIMEOUTS timeouts = {};
     if (SetCommTimeouts(handle, &timeouts) == 0)
     {
-        return false;
+        const DWORD err = GetLastError();
+        return {.code = cpp_core::StatusCodes::kSetTimeoutError,
+                .message = "SetCommTimeouts failed: " + cpp_bindings_windows::detail::win32ErrorToString(err)};
     }
 
-    return true;
+    return {.code = cpp_core::StatusCodes::kSuccess, .message = ""};
 }
 } // namespace
 
@@ -139,18 +151,19 @@ extern "C"
                                                                      cpp_core::StatusCodes::kNotFoundError);
         }
 
-        if (!applyLineSettings(handle.get(), baudrate, data_bits, parity, stop_bits))
+        const ApplyLineSettingsResult settings =
+            applyLineSettings(handle.get(), baudrate, data_bits, parity, stop_bits);
+        if (settings.code != cpp_core::StatusCodes::kSuccess)
         {
-            const cpp_core::StatusCodes code = (GetLastError() == ERROR_INVALID_PARAMETER)
-                                                   ? cpp_core::StatusCodes::kSetStateError
-                                                   : cpp_core::StatusCodes::kSetStateError;
-            return cpp_bindings_windows::detail::failWin32<intptr_t>(error_callback, code);
+            const char *msg = settings.message.empty() ? "Failed to configure serial port" : settings.message.c_str();
+            return cpp_bindings_windows::detail::failMsg<intptr_t>(error_callback, settings.code, msg);
         }
 
         // Clear buffers (best-effort)
         PurgeComm(handle.get(), PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
 
-        const intptr_t out = reinterpret_cast<intptr_t>(handle.release());
+        // Validate before releasing ownership to avoid any chance of leaking the handle.
+        const intptr_t out = reinterpret_cast<intptr_t>(handle.get());
         if (out <= 0)
         {
             // Extremely unlikely, but keep the API contract: success -> positive
@@ -158,7 +171,7 @@ extern "C"
             return cpp_bindings_windows::detail::failMsg<intptr_t>(
                 error_callback, cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle generated");
         }
-        return out;
+        return reinterpret_cast<intptr_t>(handle.release());
     }
 
 } // extern "C"

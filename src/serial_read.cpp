@@ -30,6 +30,13 @@ auto waitForRxChar(HANDLE handle, int timeout_ms) -> int
 
     DWORD mask = 0;
     const BOOL ok = WaitCommEvent(handle, &mask, &ov);
+    if (ok != 0)
+    {
+        // Completed synchronously. With an OVERLAPPED call the event is not guaranteed
+        // to be signaled in this case, so don't wait.
+        CloseHandle(ov.hEvent);
+        return 1;
+    }
     if (ok == 0)
     {
         const DWORD err = GetLastError();
