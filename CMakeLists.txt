@@ -98,6 +98,11 @@ target_link_libraries(
     cpp_core::cpp_core
 )
 
+# cpp-core's `MODULE_API` macro checks for `cpp_windows_bindings_EXPORTS` on Windows.
+# Our target is named `cpp_bindings_windows`, so CMake would otherwise define
+# `cpp_bindings_windows_EXPORTS` and `MODULE_API` would resolve to dllimport.
+target_compile_definitions(cpp_bindings_windows PRIVATE cpp_windows_bindings_EXPORTS)
+
 target_compile_features(cpp_bindings_windows PUBLIC cxx_std_23)
 
 # Collect all test source files
