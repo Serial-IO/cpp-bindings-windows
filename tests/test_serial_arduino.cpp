@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 namespace
 {
@@ -43,6 +44,42 @@ auto widenUtf8(const char *s) -> std::wstring
         out.pop_back();
     }
     return out;
+}
+
+auto readExact(intptr_t handle, char *dst, int want_bytes, int total_timeout_ms) -> int
+{
+    if (dst == nullptr || want_bytes <= 0)
+    {
+        return 0;
+    }
+
+    const ULONGLONG start = GetTickCount64();
+    int total = 0;
+    while (total < want_bytes)
+    {
+        const ULONGLONG now = GetTickCount64();
+        const int elapsed = static_cast<int>(now - start);
+        if (elapsed >= total_timeout_ms)
+        {
+            break;
+        }
+
+        // Read remaining bytes with a small per-call timeout to make progress.
+        const int remaining = want_bytes - total;
+        const int chunk = serialRead(handle, dst + total, remaining, 200, 1, nullptr);
+        if (chunk < 0)
+        {
+            return chunk;
+        }
+        if (chunk == 0)
+        {
+            Sleep(10);
+            continue;
+        }
+        total += chunk;
+    }
+
+    return total;
 }
 } // namespace
 
@@ -99,14 +136,13 @@ TEST_F(SerialArduinoTest, WriteReadEcho)
     Sleep(500);
 
     char read_buffer[256] = {0};
-    const int read_bytes =
-        serialRead(handle_, read_buffer, static_cast<int>(sizeof(read_buffer) - 1), 2000, 1, nullptr);
+    const int read_bytes = readExact(handle_, read_buffer, message_len, 3000);
 
     EXPECT_GT(read_bytes, 0) << "Should read at least some bytes";
-    EXPECT_LE(read_bytes, static_cast<int>(sizeof(read_buffer) - 1)) << "Should not overflow buffer";
-
-    read_buffer[read_bytes] = '\0';
-    EXPECT_STRNE(read_buffer, "") << "Should receive echo from Arduino";
+    EXPECT_EQ(read_bytes, message_len) << "Should read exactly the echoed message length";
+    EXPECT_EQ(std::string_view(read_buffer, static_cast<size_t>(message_len)),
+              std::string_view(test_message, static_cast<size_t>(message_len)))
+        << "Echoed content should match what was sent";
 }
 
 TEST_F(SerialArduinoTest, MultipleEchoCycles)
@@ -124,9 +160,11 @@ TEST_F(SerialArduinoTest, MultipleEchoCycles)
         Sleep(500);
 
         char read_buffer[256] = {0};
-        const int read_bytes =
-            serialRead(handle_, read_buffer, static_cast<int>(sizeof(read_buffer) - 1), 2000, 1, nullptr);
-        EXPECT_GT(read_bytes, 0) << "Cycle " << i << ": read failed";
+        const int read_bytes = readExact(handle_, read_buffer, msg_len, 3000);
+        EXPECT_EQ(read_bytes, msg_len) << "Cycle " << i << ": read size mismatch";
+        EXPECT_EQ(std::string_view(read_buffer, static_cast<size_t>(msg_len)),
+                  std::string_view(messages[i], static_cast<size_t>(msg_len)))
+            << "Cycle " << i << ": echo content mismatch";
     }
 }
 
