@@ -66,6 +66,7 @@ CPMAddPackage(
     OPTIONS
     "INSTALL_GTEST OFF"
     "gtest_force_shared_crt ON"
+    "BUILD_GMOCK OFF"
 )
 
 include(CTest)
@@ -126,7 +127,6 @@ if(TEST_SOURCES)
         cpp_bindings_windows
         GTest::gtest
         GTest::gtest_main
-        GTest::gmock
     )
 
     target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_23)
