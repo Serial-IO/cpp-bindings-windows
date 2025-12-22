@@ -26,12 +26,34 @@ jobs:
           $pkgRoot = Join-Path $env:ChocolateyInstall "lib\com0com"
           if (-not (Test-Path $pkgRoot)) { throw "com0com package root not found at $pkgRoot" }
 
-          # Avoid searching huge directories (Program Files). Only look inside the Chocolatey package folder.
-          $setupcItem = Get-ChildItem -Recurse -File -Filter setupc.exe -ErrorAction Stop $pkgRoot | Select-Object -First 1
-          if (-not $setupcItem) { throw "setupc.exe not found under $pkgRoot" }
+          # Fast, deterministic search for setupc.exe and com0com.inf (avoid full disk recursion).
+          $setupCandidates = @(
+            (Join-Path $pkgRoot "tools\\setupc.exe"),
+            (Join-Path $pkgRoot "tools\\com0com\\setupc.exe"),
+            "${env:ProgramFiles(x86)}\\com0com\\setupc.exe",
+            "${env:ProgramFiles}\\com0com\\setupc.exe"
+          ) | Where-Object { $_ -and (Test-Path $_) }
 
-          $infItem = Get-ChildItem -Recurse -File -Filter com0com.inf -ErrorAction Stop $pkgRoot | Select-Object -First 1
-          if (-not $infItem) { throw "com0com.inf not found under $pkgRoot" }
+          $setupcItem = $null
+          foreach ($p in $setupCandidates) { $setupcItem = Get-Item -LiteralPath $p; break }
+          if (-not $setupcItem) {
+            $setupcItem = Get-ChildItem -Recurse -Depth 6 -File -Filter setupc.exe -ErrorAction SilentlyContinue $pkgRoot | Select-Object -First 1
+          }
+          if (-not $setupcItem) { throw "setupc.exe not found (checked candidates and searched depth<=6 under $pkgRoot)" }
+
+          $infCandidates = @(
+            (Join-Path $pkgRoot "tools\\com0com.inf"),
+            (Join-Path $pkgRoot "tools\\com0com\\com0com.inf"),
+            (Join-Path $setupcItem.DirectoryName "com0com.inf"),
+            "C:\\Windows\\INF\\com0com.inf"
+          ) | Where-Object { $_ -and (Test-Path $_) }
+
+          $infItem = $null
+          foreach ($p in $infCandidates) { $infItem = Get-Item -LiteralPath $p; break }
+          if (-not $infItem) {
+            $infItem = Get-ChildItem -Recurse -Depth 6 -File -Filter com0com.inf -ErrorAction SilentlyContinue $pkgRoot | Select-Object -First 1
+          }
+          if (-not $infItem) { throw "com0com.inf not found (checked candidates and searched depth<=6 under $pkgRoot)" }
 
           # Create COM5<->COM6
           Push-Location $infItem.DirectoryName
