@@ -22,20 +22,26 @@ jobs:
       - name: Create virtual COM pair and start echo
         shell: pwsh
         run: |
-          $setupc = $null
-          $candidates = @(
-            "${env:ProgramFiles(x86)}\com0com\setupc.exe",
-            "${env:ProgramFiles}\com0com\setupc.exe"
-          )
-          foreach ($p in $candidates) { if (Test-Path $p) { $setupc = $p; break } }
-          if (-not $setupc) { throw "setupc.exe not found after com0com install" }
+          $roots = @(
+            "C:\ProgramData\chocolatey\lib",
+            "${env:ProgramFiles}",
+            "${env:ProgramFiles(x86)}"
+          ) | Where-Object { $_ -and (Test-Path $_) }
+
+          $setupcItem = Get-ChildItem -Recurse -File -Filter setupc.exe -ErrorAction SilentlyContinue $roots | Select-Object -First 1
+          if (-not $setupcItem) { throw "setupc.exe not found after com0com install (searched: $($roots -join ', '))" }
+
+          $infItem = Get-ChildItem -Recurse -File -Filter com0com.inf -ErrorAction SilentlyContinue $roots | Select-Object -First 1
+          if (-not $infItem) { throw "com0com.inf not found after com0com install (searched: $($roots -join ', '))" }
 
           # Create COM5<->COM6
-          & $setupc install PortName=COM5 PortName=COM6 | Out-Host
+          Push-Location $infItem.DirectoryName
+          & $setupcItem.FullName install PortName=COM5 PortName=COM6 | Out-Host
+          Pop-Location
 
           # Start an echo loop on COM6 in the background
           $echoScript = @'
-          Add-Type -AssemblyName System
+          Add-Type -AssemblyName System.IO.Ports
           $sp = New-Object System.IO.Ports.SerialPort "COM6", 115200, "None", 8, "One"
           $sp.ReadTimeout = 500
           $sp.WriteTimeout = 500
@@ -55,6 +61,7 @@ jobs:
           '@
           Set-Content -Path echo.ps1 -Value $echoScript -Encoding utf8
           Start-Process pwsh -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","echo.ps1" -WindowStyle Hidden
+          Start-Sleep -Seconds 2
 
       - name: Setup CMake >= 3.30
         uses: jwlawson/actions-setup-cmake@v2
