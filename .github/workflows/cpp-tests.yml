@@ -14,6 +14,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install virtual COM port driver (com0com)
+        shell: pwsh
+        run: |
+          choco install com0com --yes --no-progress
+
+      - name: Create virtual COM pair and start echo
+        shell: pwsh
+        run: |
+          $setupc = $null
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\com0com\setupc.exe",
+            "${env:ProgramFiles}\com0com\setupc.exe"
+          )
+          foreach ($p in $candidates) { if (Test-Path $p) { $setupc = $p; break } }
+          if (-not $setupc) { throw "setupc.exe not found after com0com install" }
+
+          # Create COM5<->COM6
+          & $setupc install PortName=COM5 PortName=COM6 | Out-Host
+
+          # Start an echo loop on COM6 in the background
+          $echoScript = @'
+          Add-Type -AssemblyName System
+          $sp = New-Object System.IO.Ports.SerialPort "COM6", 115200, "None", 8, "One"
+          $sp.ReadTimeout = 500
+          $sp.WriteTimeout = 500
+          $sp.Open()
+          try {
+            while ($true) {
+              try {
+                $b = $sp.ReadByte()
+                if ($b -ge 0) { $sp.BaseStream.WriteByte([byte]$b); $sp.BaseStream.Flush() }
+              } catch [System.TimeoutException] {
+                continue
+              }
+            }
+          } finally {
+            $sp.Close()
+          }
+          '@
+          Set-Content -Path echo.ps1 -Value $echoScript -Encoding utf8
+          Start-Process pwsh -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","echo.ps1" -WindowStyle Hidden
+
       - name: Setup CMake >= 3.30
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -28,6 +70,8 @@ jobs:
           cmake --build build --config Release
 
       - name: Run C++ unit/integration tests
+        env:
+          SERIAL_TEST_PORT: COM5
         run: |
           ctest --test-dir build -C Release --output-on-failure
 

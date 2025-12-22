@@ -92,15 +92,12 @@ class SerialArduinoTest : public ::testing::Test
         std::wstring port_w = widenUtf8(env_port);
         if (port_w.empty())
         {
-            port_w = L"COM3";
+            port_w = L"COM5";
         }
 
         handle_ = serialOpen(const_cast<void *>(static_cast<const void *>(port_w.c_str())), 115200, 8, 0, 0, nullptr);
-        if (handle_ <= 0)
-        {
-            GTEST_SKIP() << "Could not open serial port. Set SERIAL_TEST_PORT (e.g. "
-                            "COM3) or connect Arduino.";
-        }
+        ASSERT_GT(handle_, 0) << "Could not open serial port. Set SERIAL_TEST_PORT (e.g. COM5) or provide a working "
+                                 "virtual/real serial device.";
 
         // Arduino resets on open; wait a bit.
         Sleep(2000);
