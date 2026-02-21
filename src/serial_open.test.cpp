@@ -9,7 +9,6 @@
 #endif
 #include <windows.h>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "test_helpers/error_capture.hpp"
