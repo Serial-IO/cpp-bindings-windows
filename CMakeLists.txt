@@ -30,14 +30,6 @@ project(
 
 file(WRITE "${CMAKE_BINARY_DIR}/env.bat" "set PACKAGE_VERSION=${GIT_DESCRIBE_NO_V}\n")
 
-# Generate JSR package metadata from the same git-derived version as the library.
-# We generate into the source directory to match the Linux repo behavior.
-configure_file(
-    "${CMAKE_SOURCE_DIR}/jsr/package/jsr.json.in"
-    "${CMAKE_SOURCE_DIR}/jsr/package/jsr.json"
-    @ONLY
-)
-
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

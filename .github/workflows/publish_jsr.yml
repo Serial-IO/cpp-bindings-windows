@@ -47,25 +47,23 @@ jobs:
           path: artifacts
 
       - name: 'Prepare files for JSR'
-        env:
-          JSR_VERSION: ${{ inputs.version }}
         shell: pwsh
         run: |
           $dll = Join-Path (Get-Location) "artifacts/libcpp_bindings_windows.dll"
           if (-not (Test-Path $dll)) { throw "DLL not found: $dll" }
-          New-Item -ItemType Directory -Force -Path jsr/package/bin | Out-Null
-          ./jsr/scripts/embed_binary.ps1 $dll jsr/package/bin windows-x86_64
-          Copy-Item -Force LICENSE jsr/package/LICENSE
-          (Get-Content jsr/package/jsr.json.in) -replace '@PROJECT_VERSION@', $env:JSR_VERSION | Set-Content jsr/package/jsr.json -NoNewline
+          New-Item -ItemType Directory -Force -Path jsr/bin | Out-Null
+          ./jsr/scripts/embed_binary.ps1 $dll jsr/bin windows-x86_64
+          Copy-Item -Force LICENSE jsr/LICENSE
+          ./jsr/scripts/set_version.ps1 jsr/jsr.json "${{ inputs.version }}"
 
       - name: 'Publish package to JSR (normal)'
         if: inputs.publish
-        working-directory: jsr/package
+        working-directory: jsr
         run: |
           deno publish --allow-dirty
 
       - name: 'Publish package to JSR (dry-run)'
         if: ${{ !inputs.publish }}
-        working-directory: jsr/package
+        working-directory: jsr
         run: |
           deno publish --allow-dirty --dry-run
