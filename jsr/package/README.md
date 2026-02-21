@@ -5,17 +5,12 @@ blob**.
 
 ## Usage
 
-Import the JSON and write the `.dll` to disk (consumer project example):
+Import the binary export and write the `.dll` to disk (same API as `@serial/cpp-bindings-linux`):
 
 ```ts
-import blob from "@serial/cpp-bindings-windows/bin/x86_64" with {
-    type: "json",
-};
+import { x86_64 } from "@serial/cpp-bindings-windows/bin";
 
-const bytes = new TextEncoder().encode(atob(blob.data));
-
-const tempFilePath = Deno.makeTempFileSync();
-Deno.writeFileSync(tempFilePath, bytes, { mode: 0o755 });
+Deno.writeFileSync(`./${x86_64.filename}`, Uint8Array.fromBase64(x86_64.data));
 
 // Now you can open the binary using for example `Deno.dlopen`
 ```

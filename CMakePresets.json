@@ -11,8 +11,15 @@
       }
     },
     {
+      "name": "windows-vs-release",
+      "displayName": "Windows Visual Studio 2022 Release",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build",
+      "architecture": "x64"
+    },
+    {
       "name": "windows-msvc-release",
-      "displayName": "Windows MSVC Release",
+      "displayName": "Windows MSVC Release (Ninja)",
       "inherits": "default",
       "cacheVariables": {
         "CMAKE_C_COMPILER": "cl",
@@ -31,6 +38,10 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "windows-vs-release",
+      "configurePreset": "windows-vs-release"
+    },
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc-release"

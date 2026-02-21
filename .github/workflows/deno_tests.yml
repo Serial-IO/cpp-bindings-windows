@@ -1,0 +1,42 @@
+name: Deno Integration Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  deno-tests:
+    name: Deno integration tests (deno ${{ matrix.deno }})
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        deno: ["2.6.0", "2.5.0"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup CMake >= 3.30
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: "3.31.x"
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ matrix.deno }}
+
+      - name: Configure CMake
+        run: |
+          cmake --preset windows-vs-release
+
+      - name: Build
+        run: |
+          cmake --build --preset windows-vs-release --config Release
+
+      - name: Run Deno integration tests
+        working-directory: integration_tests
+        run: |
+          deno task test
