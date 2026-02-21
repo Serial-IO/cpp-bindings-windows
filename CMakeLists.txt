@@ -13,7 +13,7 @@ include(cmake/CPM.cmake)
 CPMAddPackage(
     NAME cmake_git_versioning
     GITHUB_REPOSITORY Katze719/cmake-git-versioning
-    GIT_TAG v1.0.1
+    GIT_TAG v1.1.0
 )
 
 # Include cmake-git-versioning module
@@ -27,6 +27,8 @@ project(
     DESCRIPTION "Windows implementation of cpp-core serial communication bindings"
     LANGUAGES CXX
 )
+
+file(WRITE "${CMAKE_BINARY_DIR}/env.bat" "set PACKAGE_VERSION=${GIT_DESCRIBE_NO_V}\n")
 
 # Generate JSR package metadata from the same git-derived version as the library.
 # We generate into the source directory to match the Linux repo behavior.
@@ -66,16 +68,15 @@ CPMAddPackage(
     OPTIONS
     "INSTALL_GTEST OFF"
     "gtest_force_shared_crt ON"
-    "BUILD_GMOCK OFF"
 )
 
 include(CTest)
 enable_testing()
 
-file(
-    GLOB_RECURSE LIB_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
+# Library sources: src/*.cpp only, exclude *.test.cpp and test_helpers/
+file(GLOB_RECURSE LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*\\.test\\.cpp$")
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/test_helpers/.*")
 
 add_library(cpp_bindings_windows SHARED ${LIB_SOURCES})
 
@@ -106,11 +107,11 @@ target_compile_definitions(cpp_bindings_windows PRIVATE cpp_windows_bindings_EXP
 
 target_compile_features(cpp_bindings_windows PUBLIC cxx_std_23)
 
-# Collect all test source files
-file(
-    GLOB_RECURSE TEST_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
-)
+# Test sources: src/*.test.cpp, tests/*.test.cpp, src/test_helpers/*.cpp (helpers excluded from lib)
+file(GLOB SRC_UNIT_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.test.cpp")
+file(GLOB TESTS_INTEGRATION "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.test.cpp")
+file(GLOB TEST_HELPER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/test_helpers/*.cpp")
+set(TEST_SOURCES ${SRC_UNIT_TESTS} ${TESTS_INTEGRATION} ${TEST_HELPER_SOURCES})
 
 if(TEST_SOURCES)
     add_executable(cpp_bindings_windows_tests ${TEST_SOURCES})
@@ -118,6 +119,7 @@ if(TEST_SOURCES)
     target_include_directories(
         cpp_bindings_windows_tests
         PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/generated
     )
 
@@ -127,6 +129,7 @@ if(TEST_SOURCES)
         cpp_bindings_windows
         GTest::gtest
         GTest::gtest_main
+        GTest::gmock
     )
 
     target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_23)
