@@ -81,7 +81,8 @@ extern "C"
                                                               "Invalid buffer or buffer_size");
         }
 
-        if (handle <= 0 || handle > std::numeric_limits<intptr_t>::max())
+        if (handle <= 0 || handle > std::numeric_limits<int>::max() ||
+            handle > std::numeric_limits<intptr_t>::max())
         {
             return cpp_bindings_windows::detail::failMsg<int>(
                 error_callback, cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle");
