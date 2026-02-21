@@ -39,7 +39,7 @@ jobs:
 
       - name: 'Build tests'
         run: |
-          cmake --build --preset windows-vs-release --config Release --target cpp_bindings_windows_tests
+          cmake --build --preset windows-vs-release --config Release
 
       - name: 'Copy library artifact next to test exe'
         shell: pwsh
