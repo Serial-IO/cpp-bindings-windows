@@ -1,7 +1,7 @@
 {
     "name": "@serial/cpp-bindings-windows",
     "version": "",
-    "license": "./LICENSE",
+    "license": "GPL-3.0-only",
     "description": "Windows shared-library bindings for Serial-IO/cpp-core (distributed via JSON/base64 because JSR has limited binary support).",
     "exports": {
         "./bin": "./src/bin/index.ts"
