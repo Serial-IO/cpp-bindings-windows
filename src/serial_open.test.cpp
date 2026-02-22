@@ -15,7 +15,7 @@
 
 namespace
 {
-const wchar_t *kNonExistentPort = L"COM99999";
+const char *kNonExistentPort = "COM99999";
 }
 
 class SerialOpenTest : public ::testing::Test

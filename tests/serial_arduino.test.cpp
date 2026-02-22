@@ -17,35 +17,6 @@
 
 namespace
 {
-auto widenUtf8(const char *s) -> std::wstring
-{
-    if (s == nullptr || s[0] == '\0')
-    {
-        return {};
-    }
-
-    const int needed = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
-    if (needed <= 0)
-    {
-        return {};
-    }
-
-    std::wstring out;
-    out.resize(static_cast<size_t>(needed));
-    const int written = MultiByteToWideChar(CP_UTF8, 0, s, -1, out.data(), needed);
-    if (written <= 0)
-    {
-        return {};
-    }
-
-    // drop trailing null terminator for convenience
-    if (!out.empty() && out.back() == L'\0')
-    {
-        out.pop_back();
-    }
-    return out;
-}
-
 auto readExact(intptr_t handle, char *dst, int want_bytes, int total_timeout_ms) -> int
 {
     if (dst == nullptr || want_bytes <= 0)
@@ -89,13 +60,9 @@ class SerialArduinoTest : public ::testing::Test
     void SetUp() override
     {
         const char *env_port = std::getenv("SERIAL_TEST_PORT");
-        std::wstring port_w = widenUtf8(env_port);
-        if (port_w.empty())
-        {
-            port_w = L"COM5";
-        }
+        const char *port = (env_port != nullptr && env_port[0] != '\0') ? env_port : "COM5";
 
-        handle_ = serialOpen(const_cast<void *>(static_cast<const void *>(port_w.c_str())), 115200, 8, 0, 0, nullptr);
+        handle_ = serialOpen(const_cast<void *>(static_cast<const void *>(port)), 115200, 8, 0, 0, nullptr);
         if (handle_ <= 0)
         {
             GTEST_SKIP() << "Could not open serial port '" << (env_port ? env_port : "COM5")
@@ -104,7 +71,6 @@ class SerialArduinoTest : public ::testing::Test
 
         // Arduino resets on open; wait a bit.
         Sleep(2000);
-        port_w_ = std::move(port_w);
     }
 
     void TearDown() override
@@ -117,7 +83,6 @@ class SerialArduinoTest : public ::testing::Test
     }
 
     intptr_t handle_ = 0;
-    std::wstring port_w_;
 };
 
 TEST_F(SerialArduinoTest, OpenClose)

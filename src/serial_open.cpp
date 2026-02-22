@@ -3,10 +3,39 @@
 
 #include "detail/win32_helpers.hpp"
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include <string>
 
 namespace
 {
+auto utf8ToWide(const char *utf8) -> std::wstring
+{
+    if (utf8 == nullptr || utf8[0] == '\0')
+    {
+        return {};
+    }
+    const int needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, nullptr, 0);
+    if (needed <= 0)
+    {
+        return {};
+    }
+    std::wstring out(static_cast<size_t>(needed), L'\0');
+    const int written = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, out.data(), needed);
+    if (written <= 0)
+    {
+        return {};
+    }
+    if (!out.empty() && out.back() == L'\0')
+    {
+        out.pop_back();
+    }
+    return out;
+}
+
 auto normalizePortPath(const wchar_t *port) -> std::wstring
 {
     // Accept:
@@ -137,9 +166,15 @@ extern "C"
                 error_callback, cpp_core::StatusCodes::kSetStateError, "Invalid data bits: must be 5-8");
         }
 
-        // Windows: port is documented as const wchar_t*
-        const auto *port_path = static_cast<const wchar_t *>(port);
-        const std::wstring device_path = normalizePortPath(port_path);
+        // Port is UTF-8 (same as Linux); convert to wide for Windows API.
+        const auto *port_utf8 = static_cast<const char *>(port);
+        std::wstring port_wide = utf8ToWide(port_utf8);
+        if (port_wide.empty())
+        {
+            return cpp_bindings_windows::detail::failMsg<intptr_t>(
+                error_callback, cpp_core::StatusCodes::kNotFoundError, "Port string is invalid or not valid UTF-8");
+        }
+        const std::wstring device_path = normalizePortPath(port_wide.c_str());
 
         cpp_bindings_windows::detail::UniqueHandle handle(
             CreateFileW(device_path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
