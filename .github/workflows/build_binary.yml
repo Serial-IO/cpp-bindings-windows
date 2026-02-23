@@ -57,6 +57,7 @@ jobs:
         shell: pwsh
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+
         run: |
           $v = $env:PACKAGE_VERSION
           if ($v -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|rc|beta|experimental)\.[1-9]\d*)?$') {
