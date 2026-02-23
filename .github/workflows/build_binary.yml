@@ -42,7 +42,7 @@ jobs:
           $content = Get-Content -Raw build/env.bat
           $m = [regex]::Match($content, 'PACKAGE_VERSION=(.+)')
           $v = if ($m.Success) { $m.Groups[1].Value.Trim() } else { '0.0.0' }
-          echo "package_version=$v" >> $env:GITHUB_OUTPUT
+          echo "PACKAGE_VERSION=$v" >> $env:GITHUB_OUTPUT
 
       - name: 'Copy DLL to stable path and upload artifact'
         shell: pwsh
@@ -56,7 +56,7 @@ jobs:
         id: check-tag
         shell: pwsh
         env:
-          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.PACKAGE_VERSION }}
 
         run: |
           $v = $env:PACKAGE_VERSION
@@ -77,13 +77,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: 'v${{ steps.version.outputs.package_version }}'
+          name: 'v${{ steps.version.outputs.PACKAGE_VERSION }}'
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: build/out/libcpp_bindings_windows.dll
 
     outputs:
-      package_version: ${{ steps.version.outputs.package_version }}
+      package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
       is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
 
   test-unit-cpp:
