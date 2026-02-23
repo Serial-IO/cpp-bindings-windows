@@ -52,9 +52,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path ./jsr/bin | Out-Null
           Copy-Item -Force ./artifacts/libcpp_bindings_windows.dll ./jsr/bin/x86_64.dll
           
-          ./jsr/scripts/binary_to_json.ps1 artifacts/libcpp_bindings_windows.dll jsr/bin/x86_64.json windows-x86_64
+          ./jsr/scripts/binary_to_json.ps1 `
+            artifacts/libcpp_bindings_windows.dll `
+            jsr/bin/x86_64.json windows-x86_64
           
-          ./jsr/scripts/set_version.ps1 jsr/jsr.json "${{ inputs.version }}"
+          ./jsr/scripts/set_version.ps1 `
+            jsr/jsr.json `
+            "${{ inputs.version }}"
 
       - name: 'Publish package to JSR (normal)'
         if: inputs.publish
