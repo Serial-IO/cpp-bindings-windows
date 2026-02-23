@@ -49,11 +49,12 @@ jobs:
       - name: 'Prepare files for JSR'
         shell: pwsh
         run: |
-          $dll = Join-Path (Get-Location) "artifacts/libcpp_bindings_windows.dll"
-          if (-not (Test-Path $dll)) { throw "DLL not found: $dll" }
           New-Item -ItemType Directory -Force -Path jsr/bin | Out-Null
-          ./jsr/scripts/embed_binary.ps1 $dll jsr/bin windows-x86_64
-          Copy-Item -Force LICENSE jsr/LICENSE
+
+          Copy-Item -Force -LiteralPath artifacts/libcpp_bindings_windows.dll -Destination jsr/bin/libcpp_bindings_windows.dll
+          
+          ./jsr/scripts/binary_to_json.ps1 artifacts/libcpp_bindings_windows.dll jsr/bin/x86_64.json windows-x86_64
+          
           ./jsr/scripts/set_version.ps1 jsr/jsr.json "${{ inputs.version }}"
 
       - name: 'Publish package to JSR (normal)'
