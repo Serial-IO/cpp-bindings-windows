@@ -49,8 +49,8 @@ jobs:
       - name: 'Prepare files for JSR'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path jsr/bin | Out-Null
-          Copy-Item -Force -LiteralPath artifacts/libcpp_bindings_windows.dll -Destination jsr/bin/libcpp_bindings_windows.dll
+          New-Item -ItemType Directory -Force -Path ./jsr/bin | Out-Null
+          Copy-Item -Force ./artifacts/libcpp_bindings_windows.dll ./jsr/bin/x86_64.dll
           
           ./jsr/scripts/binary_to_json.ps1 artifacts/libcpp_bindings_windows.dll jsr/bin/x86_64.json windows-x86_64
           
