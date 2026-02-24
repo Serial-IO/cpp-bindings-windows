@@ -79,6 +79,7 @@ set_target_properties(
     VERSION "${GIT_VERSION_MAJOR}.${GIT_VERSION_MINOR}.${GIT_VERSION_PATCH}"
     SOVERSION "${GIT_VERSION_MAJOR}"
     OUTPUT_NAME cpp_bindings_windows
+    PREFIX ""
 )
 
 target_include_directories(
