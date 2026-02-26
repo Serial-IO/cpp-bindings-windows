@@ -1,20 +1,16 @@
 #include <cpp_core/interface/serial_read.h>
-#include <cpp_core/status_codes.h>
+#include <cpp_core/scope_guard.hpp>
+#include <cpp_core/validation.hpp>
 
 #include "detail/win32_helpers.hpp"
 
 #include <algorithm>
-#include <limits>
 
 namespace
 {
 auto waitForRxChar(HANDLE handle, int timeout_ms) -> int
 {
-    // Returns: -1 on error, 0 on timeout, 1 on data available.
-    if (timeout_ms < 0)
-    {
-        timeout_ms = 0;
-    }
+    timeout_ms = cpp_core::clampTimeout(timeout_ms);
 
     if (SetCommMask(handle, EV_RXCHAR) == 0)
     {
@@ -27,14 +23,15 @@ auto waitForRxChar(HANDLE handle, int timeout_ms) -> int
     {
         return -1;
     }
+    DEFER
+    {
+        CloseHandle(ov.hEvent);
+    };
 
     DWORD mask = 0;
     const BOOL ok = WaitCommEvent(handle, &mask, &ov);
     if (ok != 0)
     {
-        // Completed synchronously. With an OVERLAPPED call the event is not guaranteed
-        // to be signaled in this case, so don't wait.
-        CloseHandle(ov.hEvent);
         return 1;
     }
     if (ok == 0)
@@ -42,7 +39,6 @@ auto waitForRxChar(HANDLE handle, int timeout_ms) -> int
         const DWORD err = GetLastError();
         if (err != ERROR_IO_PENDING)
         {
-            CloseHandle(ov.hEvent);
             SetLastError(err);
             return -1;
         }
@@ -52,13 +48,11 @@ auto waitForRxChar(HANDLE handle, int timeout_ms) -> int
     if (wait_rc == WAIT_TIMEOUT)
     {
         CancelIoEx(handle, &ov);
-        CloseHandle(ov.hEvent);
         return 0;
     }
     if (wait_rc != WAIT_OBJECT_0)
     {
         CancelIoEx(handle, &ov);
-        CloseHandle(ov.hEvent);
         SetLastError(ERROR_GEN_FAILURE);
         return -1;
     }
@@ -66,13 +60,9 @@ auto waitForRxChar(HANDLE handle, int timeout_ms) -> int
     DWORD bytes = 0;
     if (GetOverlappedResult(handle, &ov, &bytes, FALSE) == 0)
     {
-        const DWORD err = GetLastError();
-        CloseHandle(ov.hEvent);
-        SetLastError(err);
         return -1;
     }
 
-    CloseHandle(ov.hEvent);
     return 1;
 }
 
@@ -90,51 +80,44 @@ auto readSome(HANDLE handle, unsigned char *dst, int size, int timeout_ms) -> in
         SetLastError(ERROR_NOT_ENOUGH_MEMORY);
         return -1;
     }
+    DEFER
+    {
+        CloseHandle(ov.hEvent);
+    };
 
     DWORD bytes_read = 0;
     const BOOL ok = ReadFile(handle, dst, static_cast<DWORD>(size), &bytes_read, &ov);
     if (ok != 0)
     {
-        CloseHandle(ov.hEvent);
         return static_cast<int>(bytes_read);
     }
 
     const DWORD err = GetLastError();
     if (err != ERROR_IO_PENDING)
     {
-        CloseHandle(ov.hEvent);
         SetLastError(err);
         return -1;
     }
 
-    if (timeout_ms < 0)
-    {
-        timeout_ms = 0;
-    }
+    timeout_ms = cpp_core::clampTimeout(timeout_ms);
     const DWORD wait_rc = WaitForSingleObject(ov.hEvent, static_cast<DWORD>(timeout_ms));
     if (wait_rc == WAIT_TIMEOUT)
     {
         CancelIoEx(handle, &ov);
-        CloseHandle(ov.hEvent);
         return 0;
     }
     if (wait_rc != WAIT_OBJECT_0)
     {
         CancelIoEx(handle, &ov);
-        CloseHandle(ov.hEvent);
         SetLastError(ERROR_GEN_FAILURE);
         return -1;
     }
 
     if (GetOverlappedResult(handle, &ov, &bytes_read, FALSE) == 0)
     {
-        const DWORD err2 = GetLastError();
-        CloseHandle(ov.hEvent);
-        SetLastError(err2);
         return -1;
     }
 
-    CloseHandle(ov.hEvent);
     return static_cast<int>(bytes_read);
 }
 } // namespace
@@ -144,24 +127,18 @@ extern "C"
     MODULE_API auto serialRead(int64_t handle, void *buffer, int buffer_size, int timeout_ms, int /*multiplier*/,
                                ErrorCallbackT error_callback) -> int
     {
-        if (buffer == nullptr || buffer_size <= 0)
+        const auto buf_ok = cpp_core::validateBuffer<int>(buffer, buffer_size, error_callback);
+        if (buf_ok < 0)
         {
-            return cpp_bindings_windows::detail::failMsg<int>(error_callback, cpp_core::StatusCodes::kBufferError,
-                                                              "Invalid buffer or buffer_size");
+            return buf_ok;
         }
 
-        if (handle <= 0 || handle > std::numeric_limits<int>::max() ||
-            handle > std::numeric_limits<intptr_t>::max())
+        HANDLE h = nullptr;
+        const auto handle_ok =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
+        if (handle_ok < 0)
         {
-            return cpp_bindings_windows::detail::failMsg<int>(
-                error_callback, cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle");
-        }
-
-        const HANDLE h = reinterpret_cast<HANDLE>(static_cast<intptr_t>(handle));
-        if (h == nullptr || h == INVALID_HANDLE_VALUE)
-        {
-            return cpp_bindings_windows::detail::failMsg<int>(
-                error_callback, cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle");
+            return handle_ok;
         }
 
         auto *buf = static_cast<unsigned char *>(buffer);
@@ -189,7 +166,6 @@ extern "C"
             }
         }
 
-        // Re-check queue after waiting
         if (!cpp_bindings_windows::detail::bytesWaiting(h, &waiting))
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kGetStateError);
@@ -208,7 +184,6 @@ extern "C"
         }
         if (total == 0)
         {
-            // tiny grace period similar to Linux implementation
             total = readSome(h, buf, first_chunk, 10);
             if (total < 0)
             {

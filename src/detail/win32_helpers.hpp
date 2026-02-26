@@ -1,6 +1,9 @@
 #pragma once
 
-#include <cpp_core/status_codes.h>
+#include <cpp_core/error_handling.hpp>
+#include <cpp_core/scope_guard.hpp>
+#include <cpp_core/unique_resource.hpp>
+#include <cpp_core/validation.hpp>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -8,85 +11,35 @@
 #include <windows.h>
 
 #include <climits>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 namespace cpp_bindings_windows::detail
 {
-class UniqueHandle
+
+// Win32 HANDLE traits for UniqueResource
+struct Win32HandleTraits
 {
-  public:
-    UniqueHandle() = default;
-    explicit UniqueHandle(HANDLE h) : handle_(h)
+    using handle_type = HANDLE;
+
+    static constexpr auto invalid() noexcept -> handle_type
     {
+        return nullptr;
     }
 
-    UniqueHandle(const UniqueHandle &) = delete;
-    auto operator=(const UniqueHandle &) -> UniqueHandle & = delete;
-
-    UniqueHandle(UniqueHandle &&other) noexcept : handle_(other.handle_)
+    static auto close(handle_type h) noexcept -> void
     {
-        other.handle_ = nullptr;
-    }
-    auto operator=(UniqueHandle &&other) noexcept -> UniqueHandle &
-    {
-        if (this != &other)
+        if (h != INVALID_HANDLE_VALUE)
         {
-            reset(other.release());
+            CloseHandle(h);
         }
-        return *this;
     }
-
-    ~UniqueHandle()
-    {
-        reset(nullptr);
-    }
-
-    [[nodiscard]] auto get() const -> HANDLE
-    {
-        return handle_;
-    }
-
-    [[nodiscard]] auto valid() const -> bool
-    {
-        return handle_ != nullptr && handle_ != INVALID_HANDLE_VALUE;
-    }
-
-    auto reset(HANDLE new_handle) -> void
-    {
-        if (valid())
-        {
-            CloseHandle(handle_);
-        }
-        handle_ = new_handle;
-    }
-
-    [[nodiscard]] auto release() -> HANDLE
-    {
-        HANDLE out = handle_;
-        handle_ = nullptr;
-        return out;
-    }
-
-  private:
-    HANDLE handle_ = nullptr;
 };
 
-template <typename Callback>
-inline auto invokeErrorCallback(Callback error_callback, cpp_core::StatusCodes code, const char *message) -> void
-{
-    if (error_callback != nullptr)
-    {
-        error_callback(static_cast<int>(code), message);
-    }
-}
+using UniqueHandle = cpp_core::UniqueResource<Win32HandleTraits>;
 
-template <typename Ret, typename Callback>
-inline auto failMsg(Callback error_callback, cpp_core::StatusCodes code, const char *message) -> Ret
-{
-    invokeErrorCallback(error_callback, code, message);
-    return static_cast<Ret>(code);
-}
-
+// Win32-specific error helpers
 inline auto win32ErrorToString(DWORD err) -> std::string
 {
     LPSTR buffer = nullptr;
@@ -109,15 +62,12 @@ inline auto win32ErrorToString(DWORD err) -> std::string
     return msg;
 }
 
-template <typename Ret, typename Callback>
-inline auto failWin32(Callback error_callback, cpp_core::StatusCodes code) -> Ret
+template <cpp_core::StatusConvertible Ret, cpp_core::ErrorCallback Callback>
+inline auto failWin32(Callback &&error_callback, cpp_core::StatusCodes code) -> Ret
 {
-    if (error_callback != nullptr)
-    {
-        const DWORD err = GetLastError();
-        const std::string msg = win32ErrorToString(err);
-        error_callback(static_cast<int>(code), msg.c_str());
-    }
+    const DWORD err = GetLastError();
+    const std::string msg = win32ErrorToString(err);
+    cpp_core::invokeError(std::forward<Callback>(error_callback), code, msg);
     return static_cast<Ret>(code);
 }
 
@@ -145,6 +95,26 @@ inline auto bytesWaiting(HANDLE handle, int *out_bytes) -> bool
         *out_bytes = static_cast<int>(stat.cbInQue);
     }
     return true;
+}
+
+// Combined int64_t -> HANDLE validation for the C API boundary.
+// Checks numeric range, nullptr, and INVALID_HANDLE_VALUE.
+template <cpp_core::StatusConvertible Ret, cpp_core::ErrorCallback Callback>
+inline auto validateWin32Handle(int64_t handle, Callback &&error_callback, HANDLE *out) -> Ret
+{
+    if (handle <= 0 || handle > std::numeric_limits<int>::max() || handle > std::numeric_limits<intptr_t>::max())
+    {
+        return cpp_core::failMsg<Ret>(std::forward<Callback>(error_callback),
+                                      cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle");
+    }
+    const HANDLE h = reinterpret_cast<HANDLE>(static_cast<intptr_t>(handle));
+    if (h == nullptr || h == INVALID_HANDLE_VALUE)
+    {
+        return cpp_core::failMsg<Ret>(std::forward<Callback>(error_callback),
+                                      cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle");
+    }
+    *out = h;
+    return static_cast<Ret>(cpp_core::StatusCodes::kSuccess);
 }
 
 } // namespace cpp_bindings_windows::detail

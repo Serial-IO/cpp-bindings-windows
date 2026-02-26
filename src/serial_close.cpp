@@ -1,9 +1,7 @@
 #include <cpp_core/interface/serial_close.h>
-#include <cpp_core/status_codes.h>
+#include <cpp_core/validation.hpp>
 
 #include "detail/win32_helpers.hpp"
-
-#include <limits>
 
 extern "C"
 {
@@ -12,20 +10,15 @@ extern "C"
     {
         if (handle <= 0)
         {
-            return static_cast<int>(cpp_core::StatusCodes::kSuccess);
+            return 0;
         }
 
-        if (handle > std::numeric_limits<int>::max() ||
-            handle > std::numeric_limits<intptr_t>::max())
+        HANDLE h = nullptr;
+        const auto handle_ok =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
+        if (handle_ok < 0)
         {
-            return cpp_bindings_windows::detail::failMsg<int>(
-                error_callback, cpp_core::StatusCodes::kInvalidHandleError, "Invalid handle");
-        }
-
-        const HANDLE h = reinterpret_cast<HANDLE>(static_cast<intptr_t>(handle));
-        if (h == nullptr || h == INVALID_HANDLE_VALUE)
-        {
-            return static_cast<int>(cpp_core::StatusCodes::kSuccess);
+            return handle_ok;
         }
 
         if (CloseHandle(h) == 0)
@@ -34,7 +27,7 @@ extern "C"
                                                                 cpp_core::StatusCodes::kCloseHandleError);
         }
 
-        return static_cast<int>(cpp_core::StatusCodes::kSuccess);
+        return 0;
     }
 
 } // extern "C"
