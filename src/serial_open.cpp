@@ -155,9 +155,14 @@ extern "C"
         }
         const std::wstring device_path = normalizePortPath(port_wide.c_str());
 
-        cpp_bindings_windows::detail::UniqueHandle handle(
+        const HANDLE raw_handle =
             CreateFileW(device_path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr));
+                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+
+        // CreateFileW returns INVALID_HANDLE_VALUE on failure, normalize to nullptr
+        // so UniqueHandle (sentinel = nullptr) treats it as invalid.
+        cpp_bindings_windows::detail::UniqueHandle handle(
+            (raw_handle == INVALID_HANDLE_VALUE) ? nullptr : raw_handle);
 
         if (!handle)
         {
