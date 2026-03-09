@@ -43,6 +43,7 @@ jobs:
         shell: pwsh
         run: |
           $content = Get-Content -Raw build/env.bat
+          echo "$content"
           $m = [regex]::Match($content, 'PACKAGE_VERSION=(.+)')
           $v = if ($m.Success) { $m.Groups[1].Value.Trim() } else { '0.0.0' }
           echo "PACKAGE_VERSION=$v" >> $env:GITHUB_OUTPUT
