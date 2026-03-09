@@ -1,0 +1,23 @@
+name: 'Block PR Check Labels'
+description: |
+  This workflow checks for specific labels and if a forbidden label exists, fails the pipeline,
+  thus preventing the merge.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - labeled
+      - unlabeled
+      - synchronize
+
+jobs:
+  check-labels:
+    name: 'Check Labels'
+    if: contains(github.event.pull_request.labels.*.name, 'Blocked')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Fail if forbidden label exists'
+        run: |
+          echo "PR still has the 'Blocked' label"
+          exit 1

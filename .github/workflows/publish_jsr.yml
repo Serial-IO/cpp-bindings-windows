@@ -1,0 +1,73 @@
+name: 'Publish JSR'
+description: |
+  This workflow serializes the build binary to Base64 and generates a JSON file with meta data.
+  The package is published to JSR (@serial/cpp-bindings-windows).
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: 'Whether to actually publish'
+        required: true
+        type: boolean
+
+      version:
+        description: 'Package version'
+        required: true
+        type: string
+
+      artifact-name:
+        description: 'Name of the artifact'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-jsr:
+    name: 'Publish JSR'
+    runs-on: windows-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup Deno'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.x'
+
+      - name: 'Download artifact'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: artifacts
+
+      - name: 'Prepare files for JSR'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ./jsr/bin | Out-Null
+          Copy-Item -Force ./artifacts/cpp_bindings_windows.dll ./jsr/bin/x86_64.dll
+          
+          ./jsr/scripts/binary_to_json.ps1 `
+            artifacts/cpp_bindings_windows.dll `
+            jsr/bin/x86_64.json windows-x86_64
+          
+          ./jsr/scripts/set_version.ps1 `
+            jsr/jsr.json `
+            "${{ inputs.version }}"
+
+      - name: 'Publish package to JSR (normal)'
+        if: inputs.publish
+        working-directory: jsr
+        run: |
+          deno publish --allow-dirty
+
+      - name: 'Publish package to JSR (dry-run)'
+        if: ${{ !inputs.publish }}
+        working-directory: jsr
+        run: |
+          deno publish --allow-dirty --dry-run

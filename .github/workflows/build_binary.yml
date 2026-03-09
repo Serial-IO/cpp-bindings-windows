@@ -1,0 +1,111 @@
+name: 'Build Binary'
+description: |
+  This workflow builds the binary files for Windows. The build binaries are stored as artifact
+  and may be reused by other workflows.
+
+on:
+  push:
+    branches: [ 'main' ]
+    tags: [ '*' ]
+
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build-binary:
+    name: 'Build binary'
+    runs-on: windows-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup CMake'
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.31.x'
+
+      - name: 'Configure CMake'
+        run: |
+          cmake --preset windows-vs-release
+
+      - name: 'Build'
+        id: build
+        run: |
+          cmake --build --preset windows-vs-release --config Release --target cpp_bindings_windows
+
+      - name: 'Set PACKAGE_VERSION from env.bat'
+        id: version
+        shell: pwsh
+        run: |
+          $content = Get-Content -Raw build/env.bat
+          $m = [regex]::Match($content, 'PACKAGE_VERSION=(.+)')
+          $v = if ($m.Success) { $m.Groups[1].Value.Trim() } else { '0.0.0' }
+          echo "PACKAGE_VERSION=$v" >> $env:GITHUB_OUTPUT
+
+      - name: 'Copy DLL to stable path and upload artifact'
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse -Path build -Filter cpp_bindings_windows.dll -File | Select-Object -First 1
+          if (-not $dll) { throw "cpp_bindings_windows.dll not found under build/" }
+          New-Item -ItemType Directory -Force -Path build/out | Out-Null
+          Copy-Item -Force $dll.FullName -Destination build/out/cpp_bindings_windows.dll
+
+      - name: 'Upload artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          name: cpp_bindings_windows
+          path: build/out/cpp_bindings_windows.dll
+
+      - name: 'Check tag'
+        id: check-tag
+        shell: pwsh
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.PACKAGE_VERSION }}
+
+        run: |
+          $v = $env:PACKAGE_VERSION
+          if ($v -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|rc|beta|experimental)\.[1-9]\d*)?$') {
+            echo "IS_VALID_PACKAGE_VERSION=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "IS_VALID_PACKAGE_VERSION=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: 'Create GitHub Release'
+        if: github.ref_type == 'tag' && steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 'v${{ steps.version.outputs.PACKAGE_VERSION }}'
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: build/out/cpp_bindings_windows.dll
+
+    outputs:
+      package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
+      is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
+
+  test-unit-cpp:
+    name: 'Run: Test Unit C++'
+    needs: [ 'build-binary' ]
+    uses: './.github/workflows/test_unit_cpp.yml'
+    with:
+      artifact-name: cpp_bindings_windows
+
+    permissions:
+      contents: read
+      checks: write
+
+  publish-jsr:
+    name: 'Run: Publish JSR'
+    needs: [ 'build-binary', 'test-unit-cpp' ]
+    uses: './.github/workflows/publish_jsr.yml'
+    with:
+      publish: ${{ needs.build-binary.outputs.is_valid_package_version == 'true' }}
+      version: ${{ needs.build-binary.outputs.package_version }}
+      artifact-name: cpp_bindings_windows
+
+    permissions:
+      contents: read
+      id-token: write

@@ -1,0 +1,20 @@
+{
+    "name": "@serial/cpp-bindings-windows",
+    "version": "",
+    "description": "Windows shared-library bindings for Serial-IO/cpp-core (distributed via JSON/base64 because JSR has limited binary support).",
+    "exports": {
+        "./bin": "./src/bin/index.ts"
+    },
+    "publish": {
+        "include": [
+            "README.md",
+            "LICENSE",
+            "jsr.json",
+            "src/**",
+            "bin/**"
+        ],
+        "exclude": [
+            "!bin/"
+        ]
+    }
+}

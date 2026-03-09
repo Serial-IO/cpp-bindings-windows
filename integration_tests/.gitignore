@@ -1,0 +1,6 @@
+# Deno
+.deno/
+*.log
+
+# Test artifacts
+*.test.ts.snap
