@@ -1,0 +1,30 @@
+name: 'Setup and Configure CMake'
+description: |
+  This action makes the setup for CMake and configures it correctly.
+
+inputs:
+  version:
+    description: |
+      What version to use for CMake setup
+
+    default: '3.31.x'
+    required: false
+
+  preset:
+    description: |
+      What preset to use for the CMake configuration
+
+    required: true
+
+outputs: {}
+runs:
+  using: composite
+  steps:
+    - name: 'Setup CMake'
+      uses: jwlawson/actions-setup-cmake@v2
+      with:
+        cmake-version: ${{ inputs.version }}
+
+    - name: 'Configure CMake'
+      run: |
+        cmake --preset ${{ inputs.preset }}
