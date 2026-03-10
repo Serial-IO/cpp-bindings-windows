@@ -1,3 +1,4 @@
+# https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action
 name: 'Setup and Configure CMake'
 description: |
   This action makes the setup for CMake and configures it correctly.
