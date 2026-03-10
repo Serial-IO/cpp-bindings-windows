@@ -1,0 +1,16 @@
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+name: 'On Pull Request'
+description: |
+  This workflow runs on a pull request.
+
+on:
+  push: {}
+
+jobs:
+  run:
+    name: 'Run'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Run'
+        run: |
+          echo "Run"
