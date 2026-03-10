@@ -1,7 +1,7 @@
 # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
-name: 'On Pull Request'
+name: 'On Push'
 description: |
-  This workflow runs on a pull request.
+  This workflow runs on a push.
 
 on:
   push: {}
