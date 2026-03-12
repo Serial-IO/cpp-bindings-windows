@@ -202,7 +202,7 @@ jobs:
             jsr/jsr.json `
             "${{ github.ref_name }}"
 
-      - name: 'Publish package to JSR (normal)'
+      - name: 'Publish package to JSR'
         working-directory: jsr
         run: |
           deno publish --allow-dirty
