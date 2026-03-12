@@ -12,6 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Setup and configure CMake'
-        uses: './.github/actions/setup_and_configure_cmake.yml'
+        uses: './.github/actions/setup_and_configure_cmake'
         with:
           preset: 'windows-vs-release'
