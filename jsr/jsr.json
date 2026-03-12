@@ -2,7 +2,7 @@
   "name": "@serial/cpp-bindings-windows",
   "version": "",
   "description": "C++ Windows Bindings for the serial library",
-  "license": "LGPL-3.0",
+  "license": "LGPL-3.0-only",
   "exports": {
     "./bin": "./src/bin/index.ts"
   },
