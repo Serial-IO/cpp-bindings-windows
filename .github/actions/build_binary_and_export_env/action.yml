@@ -1,0 +1,50 @@
+# https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action
+name: 'Build Binary and Export Env'
+description: |
+  This action builds the binary.
+
+inputs:
+  preset:
+    description: |
+      The preset to use for building.
+
+    required: true
+
+  config:
+    description: |
+      The config to use for building.
+
+    required: true
+
+  target:
+    description: |
+      The target to use for building.
+
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: 'Build'
+      shell: pwsh
+      run: |
+        cmake --build `
+          --preset ${{ inputs.preset }} `
+          --config ${{ inputs.config }} `
+          --target ${{ inputs.target }}
+    
+    - name: 'Set PACKAGE_VERSION from env.bat'
+      id: package-version
+      shell: pwsh
+      run: |
+        $content = Get-Content -Raw build/env.bat
+        echo "$content"
+        $match = [regex]::Match($content, 'PACKAGE_VERSION=(.+)')
+        $version = if ($match.Success) { $match.Groups[1].Value.Trim() } else { '0.0.0' }
+        echo "PACKAGE_VERSION=$version" >> $env:GITHUB_OUTPUT
+
+outputs:
+  package-version:
+    value: ${{ steps.package-version.outputs.PACKAGE_VERSION }}
+    description: |
+      The version of the package.

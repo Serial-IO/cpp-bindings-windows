@@ -1,0 +1,24 @@
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+name: 'On Tag'
+description: |
+  This workflow runs when a tag gets created.
+
+on:
+  push:
+    branches: [ 'main' ]
+    tags: [ '*' ]
+
+jobs:
+  run:
+    name: 'Run'
+    runs-on: windows-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup and configure CMake'
+        uses: './.github/actions/setup_and_configure_cmake'
+        with:
+          preset: 'windows-vs-release'

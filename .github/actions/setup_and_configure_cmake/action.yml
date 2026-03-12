@@ -6,14 +6,14 @@ description: |
 inputs:
   version:
     description: |
-      What version to use for CMake setup
+      The version to use for CMake setup.
 
     default: '3.31.x'
     required: false
 
   preset:
     description: |
-      What preset to use for the CMake configuration
+      The preset to use for the CMake configuration.
 
     required: true
 
