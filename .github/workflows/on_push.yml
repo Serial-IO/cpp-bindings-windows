@@ -11,6 +11,7 @@ jobs:
     name: 'Run'
     runs-on: ubuntu-latest
     steps:
-      - name: 'Run'
-        run: |
-          echo "Run"
+      - name: 'Setup and configure CMake'
+        uses: './.github/actions/setup_and_configure_cmake.yml'
+        with:
+          preset: 'windows-vs-release'
