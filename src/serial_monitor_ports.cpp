@@ -1,11 +1,12 @@
 #include <cpp_core/interface/serial_monitor_ports.h>
-#include <cpp_core/status_codes.h>
 
+#include "detail/handle_state.hpp"
 #include "detail/win32_helpers.hpp"
 
-#include <algorithm>
-#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -13,122 +14,116 @@
 
 namespace
 {
+std::mutex g_monitor_mutex;
+std::mutex g_wait_mutex;
+std::condition_variable_any g_wakeup;
+std::jthread g_monitor_thread;
 
-std::mutex g_mutex;
-std::thread g_thread;
-HANDLE g_stop_event = nullptr;
-std::atomic<bool> g_running{false};
-
-auto enumerateComPorts() -> std::set<std::string>
+auto enumerateComPorts() -> std::optional<std::set<std::string>>
 {
-    std::set<std::string> ports;
     std::vector<char> buffer(65536);
-    const DWORD len = QueryDosDeviceA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (len == 0)
+    const DWORD length = QueryDosDeviceA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length == 0)
     {
-        return ports;
+        return std::nullopt;
     }
 
-    const char *ptr = buffer.data();
-    while (*ptr != '\0')
+    std::set<std::string> ports;
+    const char *current = buffer.data();
+    while (*current != '\0')
     {
-        std::string name(ptr);
-        if (name.rfind("COM", 0) == 0 && name.size() >= 4)
+        std::string name(current);
+        if (name.size() >= 4 && (name.starts_with("COM") || name.starts_with("com")))
         {
-            ports.insert(name);
+            ports.insert(std::move(name));
         }
-        ptr += name.size() + 1;
+        current += std::char_traits<char>::length(current) + 1;
     }
     return ports;
 }
 
-void monitorLoop(void (*callback)(int event, const char *port))
+auto stopMonitor() -> void
 {
-    std::set<std::string> previous = enumerateComPorts();
-
-    while (g_running.load(std::memory_order_relaxed))
+    if (!g_monitor_thread.joinable())
     {
-        const DWORD wait = WaitForSingleObject(g_stop_event, 500);
-        if (wait == WAIT_OBJECT_0)
+        return;
+    }
+    g_monitor_thread.request_stop();
+    g_wakeup.notify_all();
+    if (g_monitor_thread.get_id() == std::this_thread::get_id())
+    {
+        g_monitor_thread.detach();
+        return;
+    }
+    g_monitor_thread.join();
+}
+
+auto monitorLoop(std::stop_token stop_token, std::set<std::string> previous,
+                 void (*callback)(int event, const char *port), ErrorCallbackT error_callback) -> void
+{
+    std::unique_lock wait_lock(g_wait_mutex);
+    while (!stop_token.stop_requested())
+    {
+        (void)g_wakeup.wait_for(wait_lock, stop_token, std::chrono::milliseconds(500), [] { return false; });
+        if (stop_token.stop_requested())
         {
             break;
         }
 
-        std::set<std::string> current = enumerateComPorts();
-
-        for (const auto &p : current)
+        wait_lock.unlock();
+        auto current = enumerateComPorts();
+        if (!current)
         {
-            if (previous.find(p) == previous.end())
-            {
-                callback(1, p.c_str());
-            }
+            cpp_core::invokeError(error_callback,
+                                  static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError),
+                                  cpp_bindings_windows::detail::win32ErrorToString(GetLastError()));
+            wait_lock.lock();
+            continue;
         }
 
-        for (const auto &p : previous)
+        for (const auto &port : *current)
         {
-            if (current.find(p) == current.end())
+            if (!previous.contains(port))
             {
-                callback(0, p.c_str());
+                callback(1, port.c_str());
             }
         }
-
-        previous = std::move(current);
+        for (const auto &port : previous)
+        {
+            if (!current->contains(port))
+            {
+                callback(0, port.c_str());
+            }
+        }
+        previous = std::move(*current);
+        wait_lock.lock();
     }
 }
-
-void stopMonitor()
-{
-    if (!g_running.load(std::memory_order_relaxed))
-    {
-        return;
-    }
-
-    g_running.store(false, std::memory_order_relaxed);
-
-    if (g_stop_event != nullptr)
-    {
-        SetEvent(g_stop_event);
-    }
-
-    if (g_thread.joinable())
-    {
-        g_thread.join();
-    }
-
-    if (g_stop_event != nullptr)
-    {
-        CloseHandle(g_stop_event);
-        g_stop_event = nullptr;
-    }
-}
-
 } // namespace
 
 extern "C"
 {
 
-    MODULE_API auto serialMonitorPorts(void (*callback_fn)(int event, const char *port),
-                                       ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialMonitorPorts(void (*callback_fn)(int event, const char *port), ErrorCallbackT error_callback)
+        -> int
     {
-        std::lock_guard lock(g_mutex);
-
+        std::lock_guard lock(g_monitor_mutex);
         stopMonitor();
-
         if (callback_fn == nullptr)
         {
-            return 0;
+            return static_cast<int>(cpp_core::StatusCode::kSuccess);
         }
 
-        g_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        if (g_stop_event == nullptr)
+        const auto callback = cpp_bindings_windows::detail::effectiveErrorCallback(error_callback);
+        auto initial_ports = enumerateComPorts();
+        if (!initial_ports)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kMonitorError);
+            return cpp_bindings_windows::detail::failWin32<int>(
+                callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError));
         }
 
-        g_running.store(true, std::memory_order_relaxed);
-        g_thread = std::thread(monitorLoop, callback_fn);
-
-        return 0;
+        g_monitor_thread = std::jthread(monitorLoop, std::move(*initial_ports), callback_fn, callback);
+        return static_cast<int>(cpp_core::StatusCode::kSuccess);
     }
 
 } // extern "C"

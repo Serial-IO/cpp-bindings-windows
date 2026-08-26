@@ -2,7 +2,7 @@
 #include <cpp_core/interface/serial_open.h>
 #include <cpp_core/interface/serial_read.h>
 #include <cpp_core/interface/serial_write.h>
-#include <cpp_core/status_codes.h>
+#include <cpp_core/status_code.h>
 #include <gtest/gtest.h>
 
 #ifndef NOMINMAX
@@ -144,7 +144,7 @@ TEST(SerialInvalidHandleTest, InvalidHandleRead)
 {
     char buffer[256];
     const int result = serialRead(-1, buffer, static_cast<int>(sizeof(buffer)), 1000, 1, nullptr);
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError))
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError))
         << "Should return error for invalid handle";
 }
 
@@ -152,12 +152,12 @@ TEST(SerialInvalidHandleTest, InvalidHandleWrite)
 {
     const char *data = "test";
     const int result = serialWrite(-1, data, 4, 1000, 1, nullptr);
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError))
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError))
         << "Should return error for invalid handle";
 }
 
 TEST(SerialInvalidHandleTest, InvalidHandleClose)
 {
     const int result = serialClose(-1, nullptr);
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kSuccess));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::kSuccess));
 }

@@ -19,7 +19,8 @@ extern "C"
         dcb.DCBlength = sizeof(DCB);
         if (GetCommState(h, &dcb) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kGetStateError);
+            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
+                                                                cpp_core::StatusCode::Control::kGetStateError);
         }
 
         return (dcb.StopBits == TWOSTOPBITS) ? 2 : 0;

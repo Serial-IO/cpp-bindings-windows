@@ -17,7 +17,8 @@ extern "C"
 
         if (data_bits < 5 || data_bits > 8)
         {
-            return cpp_core::failMsg<int>(error_callback, cpp_core::StatusCodes::kSetDataBitsError,
+            return cpp_core::failMsg<int>(cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
+                                          cpp_core::StatusCode::Configuration::kSetDataBitsError,
                                           "Invalid data bits: must be 5-8");
         }
 
@@ -25,7 +26,8 @@ extern "C"
         dcb.DCBlength = sizeof(DCB);
         if (GetCommState(h, &dcb) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kGetStateError);
+            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
+                                                                cpp_core::StatusCode::Control::kGetStateError);
         }
 
         dcb.ByteSize = static_cast<BYTE>(data_bits);
@@ -33,7 +35,7 @@ extern "C"
         if (SetCommState(h, &dcb) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCodes::kSetDataBitsError);
+                                                                cpp_core::StatusCode::Configuration::kSetDataBitsError);
         }
 
         return 0;

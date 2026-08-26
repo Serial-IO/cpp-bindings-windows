@@ -19,7 +19,7 @@ extern "C"
         if (GetCommModemStatus(h, &modem_status) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCodes::kGetModemStatusError);
+                                                                cpp_core::StatusCode::Control::kGetModemStatusError);
         }
 
         return (modem_status & MS_RING_ON) ? 1 : 0;

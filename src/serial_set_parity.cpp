@@ -28,7 +28,8 @@ extern "C"
             win_parity = ODDPARITY;
             break;
         default:
-            return cpp_core::failMsg<int>(error_callback, cpp_core::StatusCodes::kSetParityError,
+            return cpp_core::failMsg<int>(cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
+                                          cpp_core::StatusCode::Configuration::kSetParityError,
                                           "Invalid parity: must be 0, 1, or 2");
         }
 
@@ -36,7 +37,8 @@ extern "C"
         dcb.DCBlength = sizeof(DCB);
         if (GetCommState(h, &dcb) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kGetStateError);
+            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
+                                                                cpp_core::StatusCode::Control::kGetStateError);
         }
 
         dcb.Parity = win_parity;
@@ -45,7 +47,7 @@ extern "C"
         if (SetCommState(h, &dcb) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCodes::kSetParityError);
+                                                                cpp_core::StatusCode::Configuration::kSetParityError);
         }
 
         return 0;

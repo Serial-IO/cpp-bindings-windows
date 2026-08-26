@@ -18,7 +18,8 @@ extern "C"
         const DWORD func = state ? SETRTS : CLRRTS;
         if (EscapeCommFunction(h, func) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kSetRtsError);
+            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
+                                                                cpp_core::StatusCode::Control::kSetRtsError);
         }
 
         return 0;

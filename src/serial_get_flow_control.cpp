@@ -19,7 +19,8 @@ extern "C"
         dcb.DCBlength = sizeof(DCB);
         if (GetCommState(h, &dcb) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback, cpp_core::StatusCodes::kGetStateError);
+            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
+                                                                cpp_core::StatusCode::Control::kGetStateError);
         }
 
         if (dcb.fOutxCtsFlow != 0 && dcb.fRtsControl == RTS_CONTROL_HANDSHAKE)

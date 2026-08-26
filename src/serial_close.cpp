@@ -14,8 +14,7 @@ extern "C"
         }
 
         HANDLE h = nullptr;
-        const auto handle_ok =
-            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
+        const auto handle_ok = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
         if (handle_ok < 0)
         {
             return handle_ok;
@@ -23,11 +22,13 @@ extern "C"
 
         if (CloseHandle(h) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCodes::kCloseHandleError);
+            return cpp_bindings_windows::detail::failWin32<int>(
+                cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
+                cpp_core::StatusCode::Connection::kCloseHandleError);
         }
 
-        return 0;
+        cpp_bindings_windows::detail::removeHandleState(h);
+        return static_cast<int>(cpp_core::StatusCode::kSuccess);
     }
 
 } // extern "C"

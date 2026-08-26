@@ -5,6 +5,14 @@
 
 Binaries are provided as a [package on JSR](https://jsr.io/@serial/cpp-bindings-windows). They are serialized as a base64 string inside the JSON file.
 
+The package currently contains the `x86_64-windows-msvc` DLL. The release DLL
+statically includes the MSVC runtime.
+
+It also includes cpp-core FFI API metadata generated with
+[ASTrein](https://github.com/Katze719/ASTrein) at `bin/x86_64.ffi.json`.
+It describes the exported C symbols, parameter and return types, callbacks,
+default values, and API documentation used by downstream FFI adapter generators.
+
 This package is primarily intended as a dependency for [`@serial/serial`](https://jsr.io/@serial/serial). However, it can also be used independently.
 
 

@@ -17,14 +17,14 @@ extern "C"
 
         if (duration_ms <= 0)
         {
-            return cpp_core::failMsg<int>(error_callback, cpp_core::StatusCodes::kSendBreakError,
-                                          "Break duration must be > 0");
+            return cpp_core::failMsg<int>(cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
+                                          cpp_core::StatusCode::Control::kSendBreakError, "Break duration must be > 0");
         }
 
         if (SetCommBreak(h) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCodes::kSendBreakError);
+                                                                cpp_core::StatusCode::Control::kSendBreakError);
         }
 
         Sleep(static_cast<DWORD>(duration_ms));
@@ -32,7 +32,7 @@ extern "C"
         if (ClearCommBreak(h) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCodes::kSendBreakError);
+                                                                cpp_core::StatusCode::Control::kSendBreakError);
         }
 
         return 0;

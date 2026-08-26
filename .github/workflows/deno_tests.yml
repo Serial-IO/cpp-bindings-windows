@@ -34,7 +34,7 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build --preset windows-vs-release --config Release
+          cmake --build --preset windows-vs-release --config Release --target cpp_bindings_windows
 
       - name: Run Deno integration tests
         working-directory: integration_tests

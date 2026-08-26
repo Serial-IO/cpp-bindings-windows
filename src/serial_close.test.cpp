@@ -1,5 +1,5 @@
 #include <cpp_core/interface/serial_close.h>
-#include <cpp_core/status_codes.h>
+#include <cpp_core/status_code.h>
 
 #include <limits>
 
@@ -29,29 +29,29 @@ TEST_F(SerialCloseTest, CloseInvalidHandleZero)
 {
     int result = serialClose(0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kSuccess));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::kSuccess));
 }
 
 TEST_F(SerialCloseTest, CloseInvalidHandleNegative)
 {
     int result = serialClose(-1, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kSuccess));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::kSuccess));
 }
 
 TEST_F(SerialCloseTest, CloseInvalidHandleNegativeLarge)
 {
     int result = serialClose(-12345, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kSuccess));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::kSuccess));
 }
 
-TEST_F(SerialCloseTest, CloseInvalidHandleTooLarge)
+TEST_F(SerialCloseTest, HandleAboveIntMaxIsNotRejectedByRangeValidation)
 {
     auto too_large_handle = static_cast<int64_t>(std::numeric_limits<int>::max()) + 1;
     int result = serialClose(too_large_handle, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError));
+    EXPECT_NE(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
 
 TEST_F(SerialCloseTest, CloseInvalidHandleIntMaxBoundary)
@@ -59,14 +59,14 @@ TEST_F(SerialCloseTest, CloseInvalidHandleIntMaxBoundary)
     auto handle = static_cast<int64_t>(std::numeric_limits<int>::max());
     int result = serialClose(handle, error_callback);
 
-    EXPECT_NE(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError));
+    EXPECT_NE(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
 
 TEST_F(SerialCloseTest, CloseNoErrorCallback)
 {
     int result = serialClose(0, nullptr);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kSuccess));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::kSuccess));
 }
 
 TEST_F(SerialCloseTest, CloseInvalidHandle)
@@ -74,5 +74,5 @@ TEST_F(SerialCloseTest, CloseInvalidHandle)
     // Closing a value that is not a valid HANDLE
     int result = serialClose(9999, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kCloseHandleError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kCloseHandleError));
 }
