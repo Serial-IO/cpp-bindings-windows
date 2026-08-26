@@ -9,7 +9,7 @@ opening, configuring, reading from, and writing to serial ports.
 
 ## Requirements
 
-- CMake 3.30 or newer
+- CMake 3.30 or newer (4.3 or newer when building with clang-cl)
 - Git
 - A compiler with sufficient C++26 support
 - One of:
