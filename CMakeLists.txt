@@ -70,12 +70,14 @@ CPMAddPackage(
     "CMAKE_EXPORT_COMPILE_COMMANDS OFF"
 )
 
-# clang-cl only forwards Clang frontend flags through /clang:.
+# The Windows bindings consume cpp-core's C API and non-reflection helpers.
+# Released clang-cl 22 does not expose -freflection, so do not propagate that
+# experimental option into these targets.
 if(
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
     AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
 )
-    set_property(TARGET cpp_core PROPERTY INTERFACE_COMPILE_OPTIONS "/clang:-freflection")
+    set_property(TARGET cpp_core PROPERTY INTERFACE_COMPILE_OPTIONS "")
 endif()
 
 if(CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT)
