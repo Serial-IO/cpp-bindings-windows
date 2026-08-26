@@ -53,6 +53,7 @@ jobs:
         run: |
           cmake -S . -B build/ffi -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_CXX_COMPILER=clang-cl `
             -DCPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT=ON `
             "-DCPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE=$env:ASTREIN_EXECUTABLE" `
@@ -107,15 +108,15 @@ jobs:
 
       - name: 'Configure release'
         run: |
-          cmake --preset windows-vs-release `
+          cmake --preset windows-clang-release `
             -DCPP_BINDINGS_WINDOWS_STATIC_MSVC_RUNTIME=ON
 
       - name: 'Build and test'
         run: |
-          cmake --build --preset windows-vs-release --config Release `
+          cmake --build --preset windows-clang-release `
             --target cpp_bindings_windows cpp_bindings_windows_tests `
             --parallel 4
-          ctest --test-dir build -C Release `
+          ctest --test-dir build `
             --output-on-failure `
             --output-junit test-report.xml
 

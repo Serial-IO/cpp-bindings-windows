@@ -37,6 +37,15 @@
       }
     },
     {
+      "name": "windows-clang-release",
+      "displayName": "Windows Clang-CL Release",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl"
+      }
+    },
+    {
       "name": "windows-mingw-release",
       "displayName": "Windows MinGW x86-64 Release",
       "generator": "Ninja",
@@ -63,6 +72,10 @@
     {
       "name": "windows-ninja-msvc",
       "configurePreset": "windows-ninja-msvc"
+    },
+    {
+      "name": "windows-clang-release",
+      "configurePreset": "windows-clang-release"
     },
     {
       "name": "windows-mingw-release",

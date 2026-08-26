@@ -11,7 +11,7 @@ opening, configuring, reading from, and writing to serial ports.
 
 - CMake 3.30 or newer
 - Git
-- A compiler with sufficient C++26 support
+- A compiler with C++23 support
 - One of:
   - Windows with Visual Studio 2022 and the C++ workload
   - Linux with an x86-64 MinGW-w64 toolchain for cross-compilation
