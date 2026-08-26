@@ -70,6 +70,14 @@ CPMAddPackage(
     "CMAKE_EXPORT_COMPILE_COMMANDS OFF"
 )
 
+# clang-cl only forwards Clang frontend flags through /clang:.
+if(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
+)
+    set_property(TARGET cpp_core PROPERTY INTERFACE_COMPILE_OPTIONS "/clang:-freflection")
+endif()
+
 if(CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT)
     if(CPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE)
         set(_cpp_bindings_windows_astrein "${CPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE}")
@@ -167,6 +175,16 @@ CPMAddPackage(
     "gtest_force_shared_crt ON"
     "BUILD_GMOCK OFF"
 )
+
+# GoogleTest 1.14 enables /WX internally and triggers this Clang 22 warning in
+# its char8_t printer. Keep dependency warnings from breaking our test build.
+if(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
+)
+    target_compile_options(gtest PRIVATE "/clang:-Wno-character-conversion")
+    target_compile_options(gtest_main PRIVATE "/clang:-Wno-character-conversion")
+endif()
 
 include(CTest)
 enable_testing()
