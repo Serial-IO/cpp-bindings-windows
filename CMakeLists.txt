@@ -30,13 +30,14 @@ endif()
 
 file(WRITE "${CMAKE_BINARY_DIR}/env.bat" "set PACKAGE_VERSION=${GIT_DESCRIBE_NO_V}\n")
 
-# The Windows bindings use the non-reflection cpp-core headers only. Keeping the
-# implementation on C++23 lets the MSVC ABI build use the compiler shipped on
-# GitHub's Windows image; cpp-core's reflection facilities require C++26 and a
-# newer experimental compiler.
-set(CMAKE_CXX_STANDARD 23)
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Enable C++26 module support
+set(CMAKE_CXX_MODULE_STD 26)
+set(CMAKE_CXX_MODULE_EXTENSIONS OFF)
 
 option(
     CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT
@@ -119,7 +120,7 @@ if(CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT)
         PRIVATE
         cpp_bindings_windows_EXPORTS
     )
-    target_compile_features(cpp_bindings_windows_ffi_ast_context PRIVATE cxx_std_23)
+    target_compile_features(cpp_bindings_windows_ffi_ast_context PRIVATE cxx_std_26)
 
     add_custom_command(
         OUTPUT "${CPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT}"
@@ -197,10 +198,11 @@ target_include_directories(
 target_link_libraries(
     cpp_bindings_windows
     PRIVATE
+    cpp_core::cpp_core
     setupapi
 )
 
-target_compile_features(cpp_bindings_windows PRIVATE cxx_std_23)
+target_compile_features(cpp_bindings_windows PRIVATE cxx_std_26)
 
 if(MSVC AND CPP_BINDINGS_WINDOWS_STATIC_MSVC_RUNTIME)
     set_property(
@@ -234,7 +236,7 @@ if(TEST_SOURCES)
         GTest::gtest_main
     )
 
-    target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_23)
+    target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_26)
 
     include(GoogleTest)
     if(CMAKE_CROSSCOMPILING)
