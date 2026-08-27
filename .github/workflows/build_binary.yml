@@ -12,8 +12,8 @@ jobs:
     name: 'Generate FFI metadata (x86_64-windows-msvc)'
     runs-on: windows-2025
     env:
-      ASTREIN_VERSION: '1.2.0'
-      ASTREIN_SHA256: 'd8a4984dca05175a6523530bef5756ef9bf87d0e4e6d58981bee3b9980544149'
+      ASTREIN_VERSION: '1.2.1'
+      ASTREIN_SHA256: 'c90eb0e3a24dbdd8775289b30e60d0ee2dfa1c0395c8687aa9a2fabeada2d2df'
     outputs:
       package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
       is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
@@ -70,6 +70,26 @@ jobs:
       - name: 'Generate metadata'
         run: |
           cmake --build build/ffi --target cpp_bindings_windows_ffi_json
+
+      - name: 'Verify FFI metadata'
+        shell: pwsh
+        run: |
+          $metadataPath = 'dist/ffi/x86_64.ffi.json'
+          $metadata = Get-Content -Raw $metadataPath |
+            ConvertFrom-Json -ErrorAction Stop
+
+          if ($metadata.schema -ne 'astrein_ffi_api') {
+            throw "Unexpected FFI metadata schema: $($metadata.schema)"
+          }
+          if ($metadata.schemaVersion -ne 1) {
+            throw "Unexpected FFI metadata schema version: $($metadata.schemaVersion)"
+          }
+
+          $functionCount = @($metadata.functions).Count
+          if ($functionCount -eq 0) {
+            throw 'FFI metadata contains no functions'
+          }
+          Write-Host "Verified FFI metadata with $functionCount functions"
 
       - name: 'Set package version'
         id: version
