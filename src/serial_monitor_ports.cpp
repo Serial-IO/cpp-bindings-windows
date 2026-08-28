@@ -1,7 +1,7 @@
 #include <cpp_core/interface/serial_monitor_ports.h>
 
-#include "detail/handle_state.hpp"
-#include "detail/win32_helpers.hpp"
+#include "detail/fail_win32.hpp"
+#include "detail/win32_error_to_string.hpp"
 
 #include <chrono>
 #include <condition_variable>

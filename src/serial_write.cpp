@@ -1,6 +1,6 @@
 #include <cpp_core/interface/serial_write.h>
 
-#include "detail/io_impl.hpp"
+#include "detail/write_impl.hpp"
 
 extern "C"
 {

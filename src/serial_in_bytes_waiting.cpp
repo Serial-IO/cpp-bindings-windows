@@ -1,7 +1,8 @@
 #include <cpp_core/interface/serial_in_bytes_waiting.h>
 
-#include "detail/handle_state.hpp"
-#include "detail/win32_helpers.hpp"
+#include "detail/acquire_handle_context.hpp"
+#include "detail/bytes_waiting.hpp"
+#include "detail/fail_win32.hpp"
 
 extern "C"
 {

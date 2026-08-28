@@ -4,10 +4,7 @@
 #include <array>
 #include <string>
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "detail/windows.hpp"
 
 #include <gtest/gtest.h>
 

@@ -1,6 +1,6 @@
 #include <cpp_core/interface/serial_set_write_callback.h>
 
-#include "detail/handle_state.hpp"
+#include "detail/handle_types.hpp"
 
 extern "C"
 {

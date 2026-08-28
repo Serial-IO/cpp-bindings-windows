@@ -1,7 +1,8 @@
 #include <cpp_core/interface/serial_set_parity.h>
 #include <cpp_core/validation.hpp>
 
-#include "detail/win32_helpers.hpp"
+#include "detail/fail_win32.hpp"
+#include "detail/validate_win32_handle.hpp"
 
 extern "C"
 {

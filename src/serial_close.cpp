@@ -1,7 +1,9 @@
 #include <cpp_core/interface/serial_close.h>
 #include <cpp_core/validation.hpp>
 
-#include "detail/win32_helpers.hpp"
+#include "detail/fail_win32.hpp"
+#include "detail/remove_handle_state.hpp"
+#include "detail/validate_win32_handle.hpp"
 
 extern "C"
 {

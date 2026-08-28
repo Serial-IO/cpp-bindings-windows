@@ -1,8 +1,9 @@
 #include <cpp_core/interface/serial_list_ports.h>
 #include <cpp_core/scope_guard.hpp>
 
-#include "detail/handle_state.hpp"
-#include "detail/win32_helpers.hpp"
+#include "detail/fail_win32.hpp"
+#include "detail/wide_to_utf8.hpp"
+#include "detail/windows.hpp"
 
 #include <devguid.h>
 #include <setupapi.h>

@@ -1,6 +1,6 @@
 #include <cpp_core/interface/serial_in_bytes_total.h>
 
-#include "detail/handle_state.hpp"
+#include "detail/acquire_handle_context.hpp"
 
 extern "C"
 {
