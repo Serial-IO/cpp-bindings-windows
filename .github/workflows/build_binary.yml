@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-2025
     env:
       ASTREIN_VERSION: '2.0.0'
-      ASTREIN_SHA256: '8ee3dd151ce685993420fbdb4f6fd032365b62dace1568e48c992add733410d5'
+      ASTREIN_SHA256: '9e80e6ab52fa874e523f604e6e2e26edbd0a326cff6651ad53dd3d0e6045b125'
     outputs:
       package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
       is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
