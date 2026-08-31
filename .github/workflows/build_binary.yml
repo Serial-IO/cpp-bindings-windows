@@ -13,7 +13,6 @@ jobs:
     runs-on: windows-2025
     env:
       ASTREIN_VERSION: '2.0.0'
-      ASTREIN_SHA256: '9e80e6ab52fa874e523f604e6e2e26edbd0a326cff6651ad53dd3d0e6045b125'
     outputs:
       package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
       is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
@@ -37,24 +36,11 @@ jobs:
           directory: ${{ runner.temp }}/llvm
           force-url: 'https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe'
 
-      - name: 'Download ASTrein'
-        shell: pwsh
-        run: |
-          $archive = Join-Path $env:RUNNER_TEMP 'astrein-windows-x86_64.zip'
-          $destination = Join-Path $env:RUNNER_TEMP 'astrein-package'
-          Invoke-WebRequest `
-            -Uri "https://github.com/Katze719/ASTrein/releases/download/v$env:ASTREIN_VERSION/astrein-windows-x86_64.zip" `
-            -OutFile $archive
-
-          $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-          if ($actualHash -ne $env:ASTREIN_SHA256) {
-            throw "ASTrein checksum mismatch: expected $env:ASTREIN_SHA256, got $actualHash"
-          }
-
-          Expand-Archive -Path $archive -DestinationPath $destination
-          $astrein = Join-Path $destination 'astrein/bin/astrein.exe'
-          & $astrein --version
-          "ASTREIN_EXECUTABLE=$astrein" >> $env:GITHUB_ENV
+      - name: 'Setup ASTrein'
+        id: astrein
+        uses: Katze719/setup-astrein@v1
+        with:
+          version: ${{ env.ASTREIN_VERSION }}
 
       - name: 'Configure metadata context'
         shell: pwsh
@@ -64,7 +50,7 @@ jobs:
             -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_CXX_COMPILER=clang-cl `
             -DCPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT=ON `
-            "-DCPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE=$env:ASTREIN_EXECUTABLE" `
+            "-DCPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE=${{ steps.astrein.outputs.path }}" `
             "-DCPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT=$env:GITHUB_WORKSPACE/dist/ffi/x86_64.ffi.json"
 
       - name: 'Generate metadata'
