@@ -9,11 +9,12 @@ extern "C"
 
     MODULE_API auto serialSetDataBits(int64_t handle, int data_bits, ErrorCallbackT error_callback) -> int
     {
-        HANDLE h = nullptr;
-        const auto rc = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
-        if (rc < 0)
+        HANDLE native_handle = nullptr;
+        const auto status =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
+        if (status < 0)
         {
-            return rc;
+            return status;
         }
 
         if (data_bits < 5 || data_bits > 8)
@@ -23,17 +24,17 @@ extern "C"
                                           "Invalid data bits: must be 5-8");
         }
 
-        DCB dcb = {};
-        dcb.DCBlength = sizeof(DCB);
-        if (GetCommState(h, &dcb) == 0)
+        DCB serial_settings = {};
+        serial_settings.DCBlength = sizeof(DCB);
+        if (GetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Control::kGetStateError);
         }
 
-        dcb.ByteSize = static_cast<BYTE>(data_bits);
+        serial_settings.ByteSize = static_cast<BYTE>(data_bits);
 
-        if (SetCommState(h, &dcb) == 0)
+        if (SetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Configuration::kSetDataBitsError);

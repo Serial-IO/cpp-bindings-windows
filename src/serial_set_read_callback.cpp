@@ -5,9 +5,9 @@
 extern "C"
 {
 
-    MODULE_API void serialSetReadCallback(void (*callback_fn)(int bytes_read))
+    MODULE_API void serialSetReadCallback(void (*callback_function)(int bytes_read))
     {
-        cpp_bindings_windows::detail::g_read_callback.store(callback_fn, std::memory_order_release);
+        cpp_bindings_windows::detail::g_read_callback.store(callback_function, std::memory_order_release);
     }
 
 } // extern "C"

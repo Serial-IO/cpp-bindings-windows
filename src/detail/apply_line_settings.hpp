@@ -10,40 +10,40 @@ namespace cpp_bindings_windows::detail
 inline auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, cpp_core::Parity parity_value,
                               cpp_core::StopBits stop_bits_value) -> cpp_core::Status
 {
-    DCB dcb = {};
-    dcb.DCBlength = sizeof(DCB);
+    DCB serial_settings = {};
+    serial_settings.DCBlength = sizeof(DCB);
 
-    if (GetCommState(handle, &dcb) == 0)
+    if (GetCommState(handle, &serial_settings) == 0)
     {
         const DWORD error = GetLastError();
         return cpp_core::fail(cpp_core::StatusCode::Control::kGetStateError,
                               "GetCommState failed: " + win32ErrorToString(error));
     }
 
-    dcb.BaudRate = static_cast<DWORD>(baudrate);
-    dcb.ByteSize = static_cast<BYTE>(data_bits);
+    serial_settings.BaudRate = static_cast<DWORD>(baudrate);
+    serial_settings.ByteSize = static_cast<BYTE>(data_bits);
 
-    dcb.fBinary = TRUE;
-    dcb.fParity = (parity_value != cpp_core::Parity::kNone) ? TRUE : FALSE;
-    dcb.fOutxCtsFlow = FALSE;
-    dcb.fOutxDsrFlow = FALSE;
-    dcb.fDtrControl = DTR_CONTROL_ENABLE;
-    dcb.fDsrSensitivity = FALSE;
-    dcb.fTXContinueOnXoff = TRUE;
-    dcb.fOutX = FALSE;
-    dcb.fInX = FALSE;
-    dcb.fRtsControl = RTS_CONTROL_ENABLE;
+    serial_settings.fBinary = TRUE;
+    serial_settings.fParity = (parity_value != cpp_core::Parity::kNone) ? TRUE : FALSE;
+    serial_settings.fOutxCtsFlow = FALSE;
+    serial_settings.fOutxDsrFlow = FALSE;
+    serial_settings.fDtrControl = DTR_CONTROL_ENABLE;
+    serial_settings.fDsrSensitivity = FALSE;
+    serial_settings.fTXContinueOnXoff = TRUE;
+    serial_settings.fOutX = FALSE;
+    serial_settings.fInX = FALSE;
+    serial_settings.fRtsControl = RTS_CONTROL_ENABLE;
 
     switch (parity_value)
     {
     case cpp_core::Parity::kNone:
-        dcb.Parity = NOPARITY;
+        serial_settings.Parity = NOPARITY;
         break;
     case cpp_core::Parity::kEven:
-        dcb.Parity = EVENPARITY;
+        serial_settings.Parity = EVENPARITY;
         break;
     case cpp_core::Parity::kOdd:
-        dcb.Parity = ODDPARITY;
+        serial_settings.Parity = ODDPARITY;
         break;
     default:
         return cpp_core::fail(cpp_core::StatusCode::Control::kSetStateError, "Invalid parity");
@@ -51,22 +51,22 @@ inline auto applyLineSettings(HANDLE handle, int baudrate, int data_bits, cpp_co
 
     if (stop_bits_value == cpp_core::StopBits::kOne)
     {
-        dcb.StopBits = ONESTOPBIT;
+        serial_settings.StopBits = ONESTOPBIT;
     }
     else if (stop_bits_value == cpp_core::StopBits::kTwo)
     {
-        dcb.StopBits = TWOSTOPBITS;
+        serial_settings.StopBits = TWOSTOPBITS;
     }
 
-    if (SetCommState(handle, &dcb) == 0)
+    if (SetCommState(handle, &serial_settings) == 0)
     {
         const DWORD error = GetLastError();
         return cpp_core::fail(cpp_core::StatusCode::Control::kSetStateError,
                               "SetCommState failed: " + win32ErrorToString(error));
     }
 
-    COMMTIMEOUTS timeouts = {};
-    if (SetCommTimeouts(handle, &timeouts) == 0)
+    COMMTIMEOUTS communication_timeouts = {};
+    if (SetCommTimeouts(handle, &communication_timeouts) == 0)
     {
         const DWORD error = GetLastError();
         return cpp_core::fail(cpp_core::StatusCode::Configuration::kSetTimeoutError,

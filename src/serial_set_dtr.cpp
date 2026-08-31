@@ -9,15 +9,16 @@ extern "C"
 
     MODULE_API auto serialSetDtr(int64_t handle, int state, ErrorCallbackT error_callback) -> int
     {
-        HANDLE h = nullptr;
-        const auto rc = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
-        if (rc < 0)
+        HANDLE native_handle = nullptr;
+        const auto status =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
+        if (status < 0)
         {
-            return rc;
+            return status;
         }
 
-        const DWORD func = state ? SETDTR : CLRDTR;
-        if (EscapeCommFunction(h, func) == 0)
+        const DWORD communication_function = state ? SETDTR : CLRDTR;
+        if (EscapeCommFunction(native_handle, communication_function) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Control::kSetDtrError);

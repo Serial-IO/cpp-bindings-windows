@@ -587,10 +587,12 @@ CheckOptions:
     value:           ''
   - key:             zircon-temporary-objects.Names
     value:           ''
-# allow x,y,z single letter names, to be used for coordinates
-# allow fd (file descriptor) as it's a common POSIX convention
+  - key:             readability-identifier-length.MinimumVariableNameLength
+    value:           '3'
+  - key:             readability-identifier-length.MinimumParameterNameLength
+    value:           '3'
   - key:             readability-identifier-length.IgnoredVariableNames
-    value:           '^(x|y|z|m0|m1|fd|_)$'
+    value:           '^_$'
   - key:             readability-identifier-length.IgnoredParameterNames
-    value:           '^(x|y|z|m0|m1|fd|_)$'
+    value:           '^_$'
 ...

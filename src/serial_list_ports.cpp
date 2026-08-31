@@ -17,7 +17,7 @@
 
 namespace
 {
-struct PortInfo
+struct PortInformation
 {
     std::string port;
     std::string path;
@@ -48,9 +48,10 @@ auto registryString(HKEY key, const wchar_t *value_name) -> std::optional<std::w
     return std::wstring(buffer.data());
 }
 
-auto portName(HDEVINFO device_info_set, SP_DEVINFO_DATA *device_info) -> std::optional<std::wstring>
+auto portName(HDEVINFO device_information_set, SP_DEVINFO_DATA *device_information) -> std::optional<std::wstring>
 {
-    HKEY key = SetupDiOpenDevRegKey(device_info_set, device_info, DICS_FLAG_GLOBAL, 0, DIREG_DEV, KEY_QUERY_VALUE);
+    HKEY key = SetupDiOpenDevRegKey(device_information_set, device_information, DICS_FLAG_GLOBAL, 0, DIREG_DEV,
+                                    KEY_QUERY_VALUE);
     if (key == INVALID_HANDLE_VALUE)
     {
         return std::nullopt;
@@ -60,37 +61,38 @@ auto portName(HDEVINFO device_info_set, SP_DEVINFO_DATA *device_info) -> std::op
     return value;
 }
 
-auto deviceProperty(HDEVINFO device_info_set, SP_DEVINFO_DATA *device_info, DWORD property)
+auto deviceProperty(HDEVINFO device_information_set, SP_DEVINFO_DATA *device_information, DWORD property)
     -> std::optional<std::wstring>
 {
     DWORD type = 0;
     DWORD size = 0;
-    (void)SetupDiGetDeviceRegistryPropertyW(device_info_set, device_info, property, &type, nullptr, 0, &size);
+    (void)SetupDiGetDeviceRegistryPropertyW(device_information_set, device_information, property, &type, nullptr, 0,
+                                            &size);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || size < sizeof(wchar_t))
     {
         return std::nullopt;
     }
 
     std::vector<BYTE> buffer(size);
-    if (SetupDiGetDeviceRegistryPropertyW(device_info_set, device_info, property, &type, buffer.data(), size,
-                                          nullptr) == 0)
+    if (SetupDiGetDeviceRegistryPropertyW(device_information_set, device_information, property, &type, buffer.data(),
+                                          size, nullptr) == 0)
     {
         return std::nullopt;
     }
     return std::wstring(reinterpret_cast<const wchar_t *>(buffer.data()));
 }
 
-auto instanceId(HDEVINFO device_info_set, SP_DEVINFO_DATA *device_info) -> std::optional<std::wstring>
+auto instanceId(HDEVINFO device_information_set, SP_DEVINFO_DATA *device_information) -> std::optional<std::wstring>
 {
     DWORD required = 0;
-    (void)SetupDiGetDeviceInstanceIdW(device_info_set, device_info, nullptr, 0, &required);
+    (void)SetupDiGetDeviceInstanceIdW(device_information_set, device_information, nullptr, 0, &required);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || required == 0)
     {
         return std::nullopt;
     }
 
     std::vector<wchar_t> buffer(required);
-    if (SetupDiGetDeviceInstanceIdW(device_info_set, device_info, buffer.data(), required, nullptr) == 0)
+    if (SetupDiGetDeviceInstanceIdW(device_information_set, device_information, buffer.data(), required, nullptr) == 0)
     {
         return std::nullopt;
     }
@@ -136,34 +138,35 @@ auto optionalCString(const std::string &value) -> const char *
 extern "C"
 {
 
-    MODULE_API auto serialListPorts(void (*callback_fn)(const char *port, const char *path, const char *manufacturer,
-                                                        const char *serial_number, const char *pnp_id,
-                                                        const char *location_id, const char *product_id,
-                                                        const char *vendor_id),
+    MODULE_API auto serialListPorts(void (*callback_function)(const char *port, const char *path,
+                                                              const char *manufacturer, const char *serial_number,
+                                                              const char *pnp_id, const char *location_id,
+                                                              const char *product_id, const char *vendor_id),
                                     ErrorCallbackT error_callback) -> int
     {
         const auto callback = cpp_bindings_windows::detail::effectiveErrorCallback(error_callback);
-        if (callback_fn == nullptr)
+        if (callback_function == nullptr)
         {
             return cpp_core::failMsg<int>(
                 callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Io::kBufferError),
                 "Port callback must not be null");
         }
 
-        const HDEVINFO device_info_set = SetupDiGetClassDevsW(&GUID_DEVCLASS_PORTS, nullptr, nullptr, DIGCF_PRESENT);
-        if (device_info_set == INVALID_HANDLE_VALUE)
+        const HDEVINFO device_information_set =
+            SetupDiGetClassDevsW(&GUID_DEVCLASS_PORTS, nullptr, nullptr, DIGCF_PRESENT);
+        if (device_information_set == INVALID_HANDLE_VALUE)
         {
             return cpp_bindings_windows::detail::failWin32<int>(
                 callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError));
         }
-        const auto cleanup = cpp_core::defer([&] { SetupDiDestroyDeviceInfoList(device_info_set); });
+        const auto cleanup = cpp_core::defer([&] { SetupDiDestroyDeviceInfoList(device_information_set); });
 
-        std::vector<PortInfo> ports;
+        std::vector<PortInformation> ports;
         for (DWORD index = 0;; ++index)
         {
-            SP_DEVINFO_DATA device_info = {};
-            device_info.cbSize = sizeof(device_info);
-            if (SetupDiEnumDeviceInfo(device_info_set, index, &device_info) == 0)
+            SP_DEVINFO_DATA device_information = {};
+            device_information.cbSize = sizeof(device_information);
+            if (SetupDiEnumDeviceInfo(device_information_set, index, &device_information) == 0)
             {
                 if (GetLastError() == ERROR_NO_MORE_ITEMS)
                 {
@@ -173,41 +176,43 @@ extern "C"
                     callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError));
             }
 
-            const auto port_name = portName(device_info_set, &device_info);
+            const auto port_name = portName(device_information_set, &device_information);
             if (!port_name || port_name->size() < 4 ||
                 (!port_name->starts_with(L"COM") && !port_name->starts_with(L"com")))
             {
                 continue;
             }
 
-            PortInfo info;
-            info.port = cpp_bindings_windows::detail::wideToUtf8(*port_name);
-            info.path = "\\\\.\\" + info.port;
-            if (const auto value = deviceProperty(device_info_set, &device_info, SPDRP_MFG))
+            PortInformation port_information;
+            port_information.port = cpp_bindings_windows::detail::wideToUtf8(*port_name);
+            port_information.path = "\\\\.\\" + port_information.port;
+            if (const auto value = deviceProperty(device_information_set, &device_information, SPDRP_MFG))
             {
-                info.manufacturer = cpp_bindings_windows::detail::wideToUtf8(*value);
+                port_information.manufacturer = cpp_bindings_windows::detail::wideToUtf8(*value);
             }
-            if (const auto value = deviceProperty(device_info_set, &device_info, SPDRP_LOCATION_INFORMATION))
+            if (const auto value =
+                    deviceProperty(device_information_set, &device_information, SPDRP_LOCATION_INFORMATION))
             {
-                info.location_id = cpp_bindings_windows::detail::wideToUtf8(*value);
+                port_information.location_id = cpp_bindings_windows::detail::wideToUtf8(*value);
             }
-            if (const auto value = instanceId(device_info_set, &device_info))
+            if (const auto value = instanceId(device_information_set, &device_information))
             {
-                info.pnp_id = cpp_bindings_windows::detail::wideToUtf8(*value);
-                info.serial_number = serialNumber(info.pnp_id);
-                info.vendor_id = hardwareId(info.pnp_id, "VID_");
-                info.product_id = hardwareId(info.pnp_id, "PID_");
+                port_information.pnp_id = cpp_bindings_windows::detail::wideToUtf8(*value);
+                port_information.serial_number = serialNumber(port_information.pnp_id);
+                port_information.vendor_id = hardwareId(port_information.pnp_id, "VID_");
+                port_information.product_id = hardwareId(port_information.pnp_id, "PID_");
             }
-            ports.push_back(std::move(info));
+            ports.push_back(std::move(port_information));
         }
 
-        std::ranges::sort(ports, {}, &PortInfo::port);
-        for (const auto &info : ports)
+        std::ranges::sort(ports, {}, &PortInformation::port);
+        for (const auto &port_information : ports)
         {
-            callback_fn(optionalCString(info.port), optionalCString(info.path), optionalCString(info.manufacturer),
-                        optionalCString(info.serial_number), optionalCString(info.pnp_id),
-                        optionalCString(info.location_id), optionalCString(info.product_id),
-                        optionalCString(info.vendor_id));
+            callback_function(
+                optionalCString(port_information.port), optionalCString(port_information.path),
+                optionalCString(port_information.manufacturer), optionalCString(port_information.serial_number),
+                optionalCString(port_information.pnp_id), optionalCString(port_information.location_id),
+                optionalCString(port_information.product_id), optionalCString(port_information.vendor_id));
         }
         return static_cast<int>(ports.size());
     }

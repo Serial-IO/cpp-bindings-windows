@@ -104,12 +104,12 @@ auto monitorLoop(std::stop_token stop_token, std::set<std::string> previous,
 extern "C"
 {
 
-    MODULE_API auto serialMonitorPorts(void (*callback_fn)(int event, const char *port), ErrorCallbackT error_callback)
-        -> int
+    MODULE_API auto serialMonitorPorts(void (*callback_function)(int event, const char *port),
+                                       ErrorCallbackT error_callback) -> int
     {
         std::lock_guard lock(g_monitor_mutex);
         stopMonitor();
-        if (callback_fn == nullptr)
+        if (callback_function == nullptr)
         {
             return static_cast<int>(cpp_core::StatusCode::kSuccess);
         }
@@ -122,7 +122,7 @@ extern "C"
                 callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError));
         }
 
-        g_monitor_thread = std::jthread(monitorLoop, std::move(*initial_ports), callback_fn, callback);
+        g_monitor_thread = std::jthread(monitorLoop, std::move(*initial_ports), callback_function, callback);
         return static_cast<int>(cpp_core::StatusCode::kSuccess);
     }
 

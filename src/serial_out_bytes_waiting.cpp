@@ -18,14 +18,16 @@ extern "C"
         }
 
         DWORD errors = 0;
-        COMSTAT comm_status = {};
-        if (ClearCommError(context.handle, &errors, &comm_status) == 0)
+        COMSTAT communication_status = {};
+        if (ClearCommError(context.handle, &errors, &communication_status) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(
                 cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
                 static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Control::kGetStateError));
         }
-        return comm_status.cbOutQue > static_cast<DWORD>(INT_MAX) ? INT_MAX : static_cast<int>(comm_status.cbOutQue);
+        return communication_status.cbOutQue > static_cast<DWORD>(INT_MAX)
+                   ? INT_MAX
+                   : static_cast<int>(communication_status.cbOutQue);
     }
 
 } // extern "C"

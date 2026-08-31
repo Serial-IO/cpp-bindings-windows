@@ -17,40 +17,41 @@
 
 namespace
 {
-auto readExact(intptr_t handle, char *dst, int want_bytes, int total_timeout_ms) -> int
+auto readExact(intptr_t handle, char *destination, int requested_byte_count, int total_timeout_ms) -> int
 {
-    if (dst == nullptr || want_bytes <= 0)
+    if (destination == nullptr || requested_byte_count <= 0)
     {
         return 0;
     }
 
     const ULONGLONG start = GetTickCount64();
-    int total = 0;
-    while (total < want_bytes)
+    int total_bytes_read = 0;
+    while (total_bytes_read < requested_byte_count)
     {
         const ULONGLONG now = GetTickCount64();
-        const int elapsed = static_cast<int>(now - start);
-        if (elapsed >= total_timeout_ms)
+        const int elapsed_milliseconds = static_cast<int>(now - start);
+        if (elapsed_milliseconds >= total_timeout_ms)
         {
             break;
         }
 
         // Read remaining bytes with a small per-call timeout to make progress.
-        const int remaining = want_bytes - total;
-        const int chunk = serialRead(handle, dst + total, remaining, 200, 1, nullptr);
-        if (chunk < 0)
+        const int remaining_byte_count = requested_byte_count - total_bytes_read;
+        const int bytes_read =
+            serialRead(handle, destination + total_bytes_read, remaining_byte_count, 200, 1, nullptr);
+        if (bytes_read < 0)
         {
-            return chunk;
+            return bytes_read;
         }
-        if (chunk == 0)
+        if (bytes_read == 0)
         {
             Sleep(10);
             continue;
         }
-        total += chunk;
+        total_bytes_read += bytes_read;
     }
 
-    return total;
+    return total_bytes_read;
 }
 } // namespace
 
@@ -59,13 +60,13 @@ class SerialArduinoTest : public ::testing::Test
   protected:
     void SetUp() override
     {
-        const char *env_port = std::getenv("SERIAL_TEST_PORT");
-        const char *port = (env_port != nullptr && env_port[0] != '\0') ? env_port : "COM5";
+        const char *environment_port = std::getenv("SERIAL_TEST_PORT");
+        const char *port = (environment_port != nullptr && environment_port[0] != '\0') ? environment_port : "COM5";
 
         handle_ = serialOpen(const_cast<void *>(static_cast<const void *>(port)), 115200, 8, 0, 0, nullptr);
         if (handle_ <= 0)
         {
-            GTEST_SKIP() << "Could not open serial port '" << (env_port ? env_port : "COM5")
+            GTEST_SKIP() << "Could not open serial port '" << (environment_port ? environment_port : "COM5")
                          << "'. Set SERIAL_TEST_PORT (e.g. COM5) or connect Arduino.";
         }
 
@@ -93,43 +94,44 @@ TEST_F(SerialArduinoTest, OpenClose)
 TEST_F(SerialArduinoTest, WriteReadEcho)
 {
     const char *test_message = "Hello Arduino!\n";
-    const int message_len = static_cast<int>(strlen(test_message));
+    const int message_length = static_cast<int>(strlen(test_message));
 
-    const int written = serialWrite(handle_, test_message, message_len, 1000, 1, nullptr);
-    EXPECT_EQ(written, message_len) << "Should write all bytes. Written: " << written << ", Expected: " << message_len;
+    const int bytes_written = serialWrite(handle_, test_message, message_length, 1000, 1, nullptr);
+    EXPECT_EQ(bytes_written, message_length)
+        << "Should write all bytes. Written: " << bytes_written << ", Expected: " << message_length;
 
     Sleep(500);
 
     char read_buffer[256] = {0};
-    const int read_bytes = readExact(handle_, read_buffer, message_len, 3000);
+    const int read_bytes = readExact(handle_, read_buffer, message_length, 3000);
 
     EXPECT_GT(read_bytes, 0) << "Should read at least some bytes";
-    EXPECT_EQ(read_bytes, message_len) << "Should read exactly the echoed message length";
-    EXPECT_EQ(std::string_view(read_buffer, static_cast<size_t>(message_len)),
-              std::string_view(test_message, static_cast<size_t>(message_len)))
+    EXPECT_EQ(read_bytes, message_length) << "Should read exactly the echoed message length";
+    EXPECT_EQ(std::string_view(read_buffer, static_cast<size_t>(message_length)),
+              std::string_view(test_message, static_cast<size_t>(message_length)))
         << "Echoed content should match what was sent";
 }
 
 TEST_F(SerialArduinoTest, MultipleEchoCycles)
 {
     const char *messages[] = {"Test1\n", "Test2\n", "Test3\n"};
-    const int num_messages = 3;
+    const int message_count = 3;
 
-    for (int i = 0; i < num_messages; ++i)
+    for (int message_index = 0; message_index < message_count; ++message_index)
     {
-        const int msg_len = static_cast<int>(strlen(messages[i]));
+        const int message_length = static_cast<int>(strlen(messages[message_index]));
 
-        const int written = serialWrite(handle_, messages[i], msg_len, 1000, 1, nullptr);
-        EXPECT_EQ(written, msg_len) << "Cycle " << i << ": write failed";
+        const int bytes_written = serialWrite(handle_, messages[message_index], message_length, 1000, 1, nullptr);
+        EXPECT_EQ(bytes_written, message_length) << "Cycle " << message_index << ": write failed";
 
         Sleep(500);
 
         char read_buffer[256] = {0};
-        const int read_bytes = readExact(handle_, read_buffer, msg_len, 3000);
-        EXPECT_EQ(read_bytes, msg_len) << "Cycle " << i << ": read size mismatch";
-        EXPECT_EQ(std::string_view(read_buffer, static_cast<size_t>(msg_len)),
-                  std::string_view(messages[i], static_cast<size_t>(msg_len)))
-            << "Cycle " << i << ": echo content mismatch";
+        const int read_bytes = readExact(handle_, read_buffer, message_length, 3000);
+        EXPECT_EQ(read_bytes, message_length) << "Cycle " << message_index << ": read size mismatch";
+        EXPECT_EQ(std::string_view(read_buffer, static_cast<size_t>(message_length)),
+                  std::string_view(messages[message_index], static_cast<size_t>(message_length)))
+            << "Cycle " << message_index << ": echo content mismatch";
     }
 }
 

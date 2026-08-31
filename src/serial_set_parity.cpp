@@ -9,24 +9,25 @@ extern "C"
 
     MODULE_API auto serialSetParity(int64_t handle, int parity, ErrorCallbackT error_callback) -> int
     {
-        HANDLE h = nullptr;
-        const auto rc = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
-        if (rc < 0)
+        HANDLE native_handle = nullptr;
+        const auto status =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
+        if (status < 0)
         {
-            return rc;
+            return status;
         }
 
-        BYTE win_parity = NOPARITY;
+        BYTE windows_parity = NOPARITY;
         switch (parity)
         {
         case 0:
-            win_parity = NOPARITY;
+            windows_parity = NOPARITY;
             break;
         case 1:
-            win_parity = EVENPARITY;
+            windows_parity = EVENPARITY;
             break;
         case 2:
-            win_parity = ODDPARITY;
+            windows_parity = ODDPARITY;
             break;
         default:
             return cpp_core::failMsg<int>(cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
@@ -34,18 +35,18 @@ extern "C"
                                           "Invalid parity: must be 0, 1, or 2");
         }
 
-        DCB dcb = {};
-        dcb.DCBlength = sizeof(DCB);
-        if (GetCommState(h, &dcb) == 0)
+        DCB serial_settings = {};
+        serial_settings.DCBlength = sizeof(DCB);
+        if (GetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Control::kGetStateError);
         }
 
-        dcb.Parity = win_parity;
-        dcb.fParity = (parity != 0) ? TRUE : FALSE;
+        serial_settings.Parity = windows_parity;
+        serial_settings.fParity = (parity != 0) ? TRUE : FALSE;
 
-        if (SetCommState(h, &dcb) == 0)
+        if (SetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Configuration::kSetParityError);

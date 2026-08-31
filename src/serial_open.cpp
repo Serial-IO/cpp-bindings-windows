@@ -19,10 +19,10 @@ extern "C"
                                ErrorCallbackT error_callback) -> intptr_t
     {
         const auto callback = cpp_bindings_windows::detail::effectiveErrorCallback(error_callback);
-        const auto params_ok = cpp_core::validateOpenParams<intptr_t>(port, baudrate, data_bits, callback);
-        if (params_ok < 0)
+        const auto parameter_status = cpp_core::validateOpenParams<intptr_t>(port, baudrate, data_bits, callback);
+        if (parameter_status < 0)
         {
-            return params_ok;
+            return parameter_status;
         }
 
         if (parity < static_cast<int>(cpp_core::Parity::kNone) || parity > static_cast<int>(cpp_core::Parity::kOdd))
@@ -74,8 +74,8 @@ extern "C"
 
         PurgeComm(handle.get(), PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
 
-        const intptr_t out = reinterpret_cast<intptr_t>(handle.get());
-        if (out <= 0)
+        const intptr_t serial_handle = reinterpret_cast<intptr_t>(handle.get());
+        if (serial_handle <= 0)
         {
             return cpp_core::failMsg<intptr_t>(callback, cpp_core::StatusCode::Connection::kInvalidHandleError,
                                                "Invalid handle generated");

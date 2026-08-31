@@ -9,15 +9,16 @@ extern "C"
 
     MODULE_API auto serialGetRi(int64_t handle, ErrorCallbackT error_callback) -> int
     {
-        HANDLE h = nullptr;
-        const auto rc = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
-        if (rc < 0)
+        HANDLE native_handle = nullptr;
+        const auto status =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
+        if (status < 0)
         {
-            return rc;
+            return status;
         }
 
         DWORD modem_status = 0;
-        if (GetCommModemStatus(h, &modem_status) == 0)
+        if (GetCommModemStatus(native_handle, &modem_status) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Control::kGetModemStatusError);

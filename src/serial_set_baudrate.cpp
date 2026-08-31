@@ -9,11 +9,12 @@ extern "C"
 
     MODULE_API auto serialSetBaudrate(int64_t handle, int baudrate, ErrorCallbackT error_callback) -> int
     {
-        HANDLE h = nullptr;
-        const auto rc = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
-        if (rc < 0)
+        HANDLE native_handle = nullptr;
+        const auto status =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
+        if (status < 0)
         {
-            return rc;
+            return status;
         }
 
         if (baudrate < 300)
@@ -23,17 +24,17 @@ extern "C"
                                           "Invalid baudrate: must be >= 300");
         }
 
-        DCB dcb = {};
-        dcb.DCBlength = sizeof(DCB);
-        if (GetCommState(h, &dcb) == 0)
+        DCB serial_settings = {};
+        serial_settings.DCBlength = sizeof(DCB);
+        if (GetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Control::kGetStateError);
         }
 
-        dcb.BaudRate = static_cast<DWORD>(baudrate);
+        serial_settings.BaudRate = static_cast<DWORD>(baudrate);
 
-        if (SetCommState(h, &dcb) == 0)
+        if (SetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Configuration::kSetBaudrateError);

@@ -9,11 +9,12 @@ extern "C"
 
     MODULE_API auto serialSetStopBits(int64_t handle, int stop_bits, ErrorCallbackT error_callback) -> int
     {
-        HANDLE h = nullptr;
-        const auto rc = cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &h);
-        if (rc < 0)
+        HANDLE native_handle = nullptr;
+        const auto status =
+            cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
+        if (status < 0)
         {
-            return rc;
+            return status;
         }
 
         if (stop_bits != 0 && stop_bits != 1 && stop_bits != 2)
@@ -23,17 +24,17 @@ extern "C"
                                           "Invalid stop bits: must be 0, 1, or 2");
         }
 
-        DCB dcb = {};
-        dcb.DCBlength = sizeof(DCB);
-        if (GetCommState(h, &dcb) == 0)
+        DCB serial_settings = {};
+        serial_settings.DCBlength = sizeof(DCB);
+        if (GetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Control::kGetStateError);
         }
 
-        dcb.StopBits = (stop_bits == 2) ? TWOSTOPBITS : ONESTOPBIT;
+        serial_settings.StopBits = (stop_bits == 2) ? TWOSTOPBITS : ONESTOPBIT;
 
-        if (SetCommState(h, &dcb) == 0)
+        if (SetCommState(native_handle, &serial_settings) == 0)
         {
             return cpp_bindings_windows::detail::failWin32<int>(error_callback,
                                                                 cpp_core::StatusCode::Configuration::kSetStopBitsError);
