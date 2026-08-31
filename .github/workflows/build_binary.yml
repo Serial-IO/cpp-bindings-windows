@@ -50,8 +50,8 @@ jobs:
             -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_CXX_COMPILER=clang-cl `
             -DCPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT=ON `
-            -DCPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE=${{ steps.astrein.outputs.path }} `
-            -DCPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT=$env:GITHUB_WORKSPACE/dist/ffi/x86_64.ffi.json`
+            "-DCPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE=${{ steps.astrein.outputs.path }}" `
+            "-DCPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT=${env:GITHUB_WORKSPACE}/dist/ffi/x86_64.ffi.json"
 
       - name: 'Generate metadata'
         run: |
