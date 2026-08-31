@@ -1,4 +1,7 @@
 name: 'Build Binary'
+description: |
+  This workflow builds the binary files for Windows. The build binaries are stored as artifact
+  and may be reused by other workflows.
 
 on:
   push:
