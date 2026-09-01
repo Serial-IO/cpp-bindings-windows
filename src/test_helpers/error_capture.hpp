@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cpp_core/interface/serial_open.h>
-#include <cpp_core/status_codes.h>
+#include <cpp_core/status_code.h>
 
 #include <string>
 

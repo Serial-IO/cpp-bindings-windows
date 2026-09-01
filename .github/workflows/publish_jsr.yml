@@ -21,6 +21,11 @@ on:
         required: true
         type: string
 
+      ffi-artifact-name:
+        description: 'Name of the FFI metadata artifact'
+        required: true
+        type: string
+
 permissions:
   contents: read
   id-token: write
@@ -46,15 +51,23 @@ jobs:
           name: ${{ inputs.artifact-name }}
           path: artifacts
 
+      - name: 'Download FFI metadata'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.ffi-artifact-name }}
+          path: artifacts/ffi
+
       - name: 'Prepare files for JSR'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path ./jsr/bin | Out-Null
           Copy-Item -Force ./artifacts/cpp_bindings_windows.dll ./jsr/bin/x86_64.dll
+          Copy-Item -Force ./artifacts/ffi/x86_64.ffi.json ./jsr/bin/x86_64.ffi.json
+          Copy-Item -Force ./LICENSE ./jsr/LICENSE
           
           ./jsr/scripts/binary_to_json.ps1 `
             artifacts/cpp_bindings_windows.dll `
-            jsr/bin/x86_64.json windows-x86_64
+            jsr/bin/x86_64.json x86_64-windows-msvc
           
           ./jsr/scripts/set_version.ps1 `
             jsr/jsr.json `

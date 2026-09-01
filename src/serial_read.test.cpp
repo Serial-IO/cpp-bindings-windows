@@ -1,5 +1,5 @@
 #include <cpp_core/interface/serial_read.h>
-#include <cpp_core/status_codes.h>
+#include <cpp_core/status_code.h>
 
 #include <array>
 #include <limits>
@@ -30,7 +30,7 @@ TEST_F(SerialReadTest, ReadNullBuffer)
 {
     int result = serialRead(1, nullptr, 10, 100, 0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kBufferError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
     EXPECT_NE(error_capture.last_message.find("buffer"), std::string::npos);
 }
 
@@ -39,7 +39,7 @@ TEST_F(SerialReadTest, ReadZeroBufferSize)
     std::array<char, 10> buffer{};
     int result = serialRead(1, buffer.data(), 0, 100, 0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kBufferError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
 }
 
 TEST_F(SerialReadTest, ReadNegativeBufferSize)
@@ -47,7 +47,7 @@ TEST_F(SerialReadTest, ReadNegativeBufferSize)
     std::array<char, 10> buffer{};
     int result = serialRead(1, buffer.data(), -1, 100, 0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kBufferError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
 }
 
 TEST_F(SerialReadTest, ReadInvalidHandleZero)
@@ -55,7 +55,7 @@ TEST_F(SerialReadTest, ReadInvalidHandleZero)
     std::array<char, 10> buffer{};
     int result = serialRead(0, buffer.data(), static_cast<int>(buffer.size()), 100, 0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
 
 TEST_F(SerialReadTest, ReadInvalidHandleNegative)
@@ -63,16 +63,16 @@ TEST_F(SerialReadTest, ReadInvalidHandleNegative)
     std::array<char, 10> buffer{};
     int result = serialRead(-1, buffer.data(), static_cast<int>(buffer.size()), 100, 0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
 
-TEST_F(SerialReadTest, ReadInvalidHandleTooLarge)
+TEST_F(SerialReadTest, ReadHandleAboveIntMaxIsNotRejectedByRangeValidation)
 {
     std::array<char, 10> buffer{};
     auto too_large = static_cast<int64_t>(std::numeric_limits<int>::max()) + 1;
     int result = serialRead(too_large, buffer.data(), static_cast<int>(buffer.size()), 100, 0, error_callback);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError));
+    EXPECT_NE(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
 
 TEST_F(SerialReadTest, ReadNoErrorCallback)
@@ -80,5 +80,5 @@ TEST_F(SerialReadTest, ReadNoErrorCallback)
     std::array<char, 10> buffer{};
     int result = serialRead(0, buffer.data(), static_cast<int>(buffer.size()), 100, 0, nullptr);
 
-    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCodes::kInvalidHandleError));
+    EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }

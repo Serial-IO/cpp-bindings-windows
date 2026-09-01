@@ -1,10 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
 
-# Windows-only project
-if(NOT WIN32)
-    message(FATAL_ERROR "cpp-bindings-windows can only be built on Windows.")
-endif()
-
 # Export compile commands to root directory
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -28,24 +23,144 @@ project(
     LANGUAGES CXX
 )
 
+# Check after project() so cross-compilation toolchains can initialize WIN32.
+if(NOT WIN32)
+    message(FATAL_ERROR "cpp-bindings-windows can only be built for Windows.")
+endif()
+
 file(WRITE "${CMAKE_BINARY_DIR}/env.bat" "set PACKAGE_VERSION=${GIT_DESCRIBE_NO_V}\n")
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Enable C++23 module support
-set(CMAKE_CXX_MODULE_STD 23)
+# Enable C++26 module support
+set(CMAKE_CXX_MODULE_STD 26)
 set(CMAKE_CXX_MODULE_EXTENSIONS OFF)
+
+option(
+    CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT
+    "Enable ASTrein JSON export for the cpp-core FFI headers"
+    OFF
+)
+option(
+    CPP_BINDINGS_WINDOWS_STATIC_MSVC_RUNTIME
+    "Statically link the MSVC runtime into the shared library"
+    OFF
+)
+set(
+    CPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE
+    ""
+    CACHE FILEPATH
+    "Path to the ASTrein executable used for FFI JSON export"
+)
+set(
+    CPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT
+    "${CMAKE_BINARY_DIR}/cpp_bindings_windows.ffi.json"
+    CACHE FILEPATH
+    "Output path for the generated cpp-core FFI API metadata"
+)
 
 CPMAddPackage(
     NAME cpp_core
     GITHUB_REPOSITORY Serial-IO/cpp-core
-    GIT_TAG v1.1.0
+    GIT_TAG v2.0.1
     OPTIONS
     "CMAKE_EXPORT_COMPILE_COMMANDS OFF"
 )
+
+# The Windows bindings consume cpp-core's C API and non-reflection helpers.
+# Released clang-cl 22 does not expose -freflection, so do not propagate that
+# experimental option into these targets.
+if(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
+)
+    set_property(TARGET cpp_core PROPERTY INTERFACE_COMPILE_OPTIONS "")
+endif()
+
+if(CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT)
+    if(CPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE)
+        set(_cpp_bindings_windows_astrein "${CPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE}")
+    else()
+        find_program(_cpp_bindings_windows_astrein NAMES astrein astrein.exe)
+    endif()
+
+    if(NOT _cpp_bindings_windows_astrein)
+        message(
+            FATAL_ERROR
+            "CPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT=ON requires ASTrein. "
+            "Install astrein or set CPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE."
+        )
+    endif()
+
+    file(
+        GLOB_RECURSE _cpp_bindings_windows_ffi_headers
+        CONFIGURE_DEPENDS
+        "${cpp_core_SOURCE_DIR}/include/*.h"
+        "${cpp_core_SOURCE_DIR}/include/*.hpp"
+    )
+    set(_cpp_bindings_windows_ffi_wrapper "${CMAKE_BINARY_DIR}/ffi.cpp")
+    get_filename_component(
+        _cpp_bindings_windows_ffi_output_dir
+        "${CPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT}"
+        DIRECTORY
+    )
+
+    file(
+        GENERATE
+        OUTPUT "${_cpp_bindings_windows_ffi_wrapper}"
+        CONTENT "#include <cpp_core/serial.h>\n"
+    )
+
+    add_library(
+        cpp_bindings_windows_ffi_ast_context
+        OBJECT
+        EXCLUDE_FROM_ALL
+        "${_cpp_bindings_windows_ffi_wrapper}"
+    )
+    target_include_directories(
+        cpp_bindings_windows_ffi_ast_context
+        PRIVATE
+        "${cpp_core_SOURCE_DIR}/include"
+    )
+    target_compile_definitions(
+        cpp_bindings_windows_ffi_ast_context
+        PRIVATE
+        cpp_bindings_windows_EXPORTS
+    )
+    target_compile_features(cpp_bindings_windows_ffi_ast_context PRIVATE cxx_std_26)
+
+    add_custom_command(
+        OUTPUT "${CPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT}"
+        COMMAND
+            ${CMAKE_COMMAND} -E make_directory
+            "${_cpp_bindings_windows_ffi_output_dir}"
+        COMMAND
+            "${_cpp_bindings_windows_astrein}"
+            --ffi
+            --compile-commands "${CMAKE_BINARY_DIR}/compile_commands.json"
+            --require-c-linkage
+            --require-default-visibility
+            --public-header "cpp_core/serial.h"
+            --api-root "${cpp_core_SOURCE_DIR}/include"
+            --output "${CPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT}"
+            "${_cpp_bindings_windows_ffi_wrapper}"
+        DEPENDS
+            "${_cpp_bindings_windows_astrein}"
+            "${CMAKE_BINARY_DIR}/compile_commands.json"
+            "${_cpp_bindings_windows_ffi_wrapper}"
+            ${_cpp_bindings_windows_ffi_headers}
+        COMMENT "Exporting cpp-core FFI API metadata with ASTrein"
+        VERBATIM
+    )
+
+    add_custom_target(
+        cpp_bindings_windows_ffi_json
+        DEPENDS "${CPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT}"
+    )
+endif()
 
 # Generate version information
 generate_git_version(
@@ -63,11 +178,21 @@ CPMAddPackage(
     "BUILD_GMOCK OFF"
 )
 
+# GoogleTest 1.14 enables /WX internally and triggers this Clang 22 warning in
+# its char8_t printer. Keep dependency warnings from breaking our test build.
+if(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
+)
+    target_compile_options(gtest PRIVATE "/clang:-Wno-character-conversion")
+    target_compile_options(gtest_main PRIVATE "/clang:-Wno-character-conversion")
+endif()
+
 include(CTest)
 enable_testing()
 
 # Library sources: src/*.cpp only, exclude *.test.cpp and test_helpers/
-file(GLOB_RECURSE LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(FILTER LIB_SOURCES EXCLUDE REGEX ".*\\.test\\.cpp$")
 list(FILTER LIB_SOURCES EXCLUDE REGEX ".*/test_helpers/.*")
 
@@ -84,27 +209,32 @@ set_target_properties(
 
 target_include_directories(
     cpp_bindings_windows
-    PUBLIC
+    PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
+    $<BUILD_INTERFACE:${cpp_core_SOURCE_DIR}/include>
 )
 
 target_link_libraries(
     cpp_bindings_windows
-    PUBLIC
+    PRIVATE
     cpp_core::cpp_core
+    setupapi
 )
 
-# cpp-core's `MODULE_API` macro checks for `cpp_windows_bindings_EXPORTS` on Windows.
-# Our target is named `cpp_bindings_windows`, so CMake would otherwise define
-# `cpp_bindings_windows_EXPORTS` and `MODULE_API` would resolve to dllimport.
-target_compile_definitions(cpp_bindings_windows PRIVATE cpp_windows_bindings_EXPORTS)
+target_compile_features(cpp_bindings_windows PRIVATE cxx_std_26)
 
-target_compile_features(cpp_bindings_windows PUBLIC cxx_std_23)
+if(MSVC AND CPP_BINDINGS_WINDOWS_STATIC_MSVC_RUNTIME)
+    set_property(
+        TARGET cpp_bindings_windows
+        PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+    )
+endif()
 
 # Test sources: src/*.test.cpp, tests/*.test.cpp, src/test_helpers/*.cpp (helpers excluded from lib)
-file(GLOB SRC_UNIT_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.test.cpp")
-file(GLOB TESTS_INTEGRATION "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.test.cpp")
-file(GLOB TEST_HELPER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/test_helpers/*.cpp")
+file(GLOB SRC_UNIT_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.test.cpp")
+file(GLOB TESTS_INTEGRATION CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.test.cpp")
+file(GLOB TEST_HELPER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test_helpers/*.cpp")
 set(TEST_SOURCES ${SRC_UNIT_TESTS} ${TESTS_INTEGRATION} ${TEST_HELPER_SOURCES})
 
 if(TEST_SOURCES)
@@ -115,6 +245,7 @@ if(TEST_SOURCES)
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/generated
+        ${cpp_core_SOURCE_DIR}/include
     )
 
     target_link_libraries(
@@ -125,10 +256,14 @@ if(TEST_SOURCES)
         GTest::gtest_main
     )
 
-    target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_23)
+    target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_26)
 
     include(GoogleTest)
-    gtest_discover_tests(cpp_bindings_windows_tests)
+    if(CMAKE_CROSSCOMPILING)
+        gtest_add_tests(TARGET cpp_bindings_windows_tests)
+    else()
+        gtest_discover_tests(cpp_bindings_windows_tests)
+    endif()
 endif()
 
 include(GNUInstallDirs)
@@ -159,5 +294,3 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS AND EXISTS "${CMAKE_BINARY_DIR}/compile_command
         COMMENT "Copying compile_commands.json to project root"
     )
 endif()
-
-

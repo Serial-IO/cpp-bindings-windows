@@ -5,18 +5,17 @@ description: |
 
 on:
   push:
-    branches: [ 'main' ]
-    tags: [ '*' ]
-
+    branches: ['main']
+    tags: ['*']
   pull_request:
-    branches: [ '*' ]
+    branches: ['*']
 
 jobs:
-  build-binary:
-    name: 'Build binary'
-    runs-on: windows-latest
-    permissions:
-      contents: write
+  generate-metadata:
+    name: 'Generate FFI metadata (x86_64-windows-msvc)'
+    runs-on: windows-2025
+    env:
+      ASTREIN_VERSION: '2.0.0'
 
     steps:
       - name: 'Checkout repository'
@@ -27,89 +26,216 @@ jobs:
       - name: 'Setup CMake'
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.31.x'
+          cmake-version: '4.3.x'
 
-      - name: 'Configure CMake'
+      - name: 'Install LLVM 22.1.8'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: '22.1.8'
+          arch: x64
+          directory: ${{ runner.temp }}/llvm
+          force-url: 'https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe'
+
+      - name: 'Setup ASTrein'
+        id: astrein
+        uses: Katze719/setup-astrein@v1
+        with:
+          version: ${{ env.ASTREIN_VERSION }}
+
+      - name: 'Configure metadata context'
+        shell: pwsh
         run: |
-          cmake --preset windows-vs-release
+          cmake -S . `
+            -B build/ffi `
+            -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=clang-cl `
+            -DCMAKE_CXX_COMPILER=clang-cl `
+            -DCPP_BINDINGS_WINDOWS_ENABLE_FFI_JSON_EXPORT=ON `
+            "-DCPP_BINDINGS_WINDOWS_ASTREIN_EXECUTABLE=${{ steps.astrein.outputs.path }}" `
+            "-DCPP_BINDINGS_WINDOWS_FFI_JSON_OUTPUT=${env:GITHUB_WORKSPACE}/dist/ffi/x86_64.ffi.json"
 
-      - name: 'Build'
-        id: build
+      - name: 'Generate metadata'
         run: |
-          cmake --build --preset windows-vs-release --config Release --target cpp_bindings_windows
+          cmake --build build/ffi --target cpp_bindings_windows_ffi_json
 
-      - name: 'Set PACKAGE_VERSION from env.bat'
+      - name: 'Verify FFI metadata'
+        shell: pwsh
+        run: |
+          $metadataPath = 'dist/ffi/x86_64.ffi.json'
+          $metadata = Get-Content -Raw $metadataPath |
+            ConvertFrom-Json -ErrorAction Stop
+
+          if ($metadata.schema -ne 'astrein_ffi_api') {
+            throw "Unexpected FFI metadata schema: $($metadata.schema)"
+          }
+          if ($metadata.schemaVersion -ne 2) {
+            throw "Unexpected FFI metadata schema version: $($metadata.schemaVersion)"
+          }
+
+          $functionCount = @($metadata.functions).Count
+          if ($functionCount -eq 0) {
+            throw 'FFI metadata contains no functions'
+          }
+          Write-Host "Verified FFI metadata with $functionCount functions"
+
+      - name: 'Set package version'
         id: version
         shell: pwsh
         run: |
-          $content = Get-Content -Raw build/env.bat
-          echo "$content"
-          $m = [regex]::Match($content, 'PACKAGE_VERSION=(.+)')
-          $v = if ($m.Success) { $m.Groups[1].Value.Trim() } else { '0.0.0' }
-          echo "PACKAGE_VERSION=$v" >> $env:GITHUB_OUTPUT
+          $content = Get-Content -Raw build/ffi/env.bat
+          $match = [regex]::Match($content, 'PACKAGE_VERSION=(.+)')
+          $version = if ($match.Success) { $match.Groups[1].Value.Trim() } else { '0.0.0' }
+          "PACKAGE_VERSION=$version" >> $env:GITHUB_OUTPUT
 
-      - name: 'Copy DLL to stable path and upload artifact'
-        shell: pwsh
-        run: |
-          $dll = Get-ChildItem -Recurse -Path build -Filter cpp_bindings_windows.dll -File | Select-Object -First 1
-          if (-not $dll) { throw "cpp_bindings_windows.dll not found under build/" }
-          New-Item -ItemType Directory -Force -Path build/out | Out-Null
-          Copy-Item -Force $dll.FullName -Destination build/out/cpp_bindings_windows.dll
-
-      - name: 'Upload artifacts'
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: error
-          name: cpp_bindings_windows
-          path: build/out/cpp_bindings_windows.dll
-
-      - name: 'Check tag'
+      - name: 'Check package version'
         id: check-tag
         shell: pwsh
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.PACKAGE_VERSION }}
-
         run: |
-          $v = $env:PACKAGE_VERSION
-          if ($v -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|rc|beta|experimental)\.[1-9]\d*)?$') {
-            echo "IS_VALID_PACKAGE_VERSION=true" >> $env:GITHUB_OUTPUT
+          if ($env:PACKAGE_VERSION -match '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|rc|beta|experimental)\.[1-9]\d*)?$') {
+            "IS_VALID_PACKAGE_VERSION=true" >> $env:GITHUB_OUTPUT
           } else {
-            echo "IS_VALID_PACKAGE_VERSION=false" >> $env:GITHUB_OUTPUT
+            "IS_VALID_PACKAGE_VERSION=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: 'Create GitHub Release'
-        if: github.ref_type == 'tag' && steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION == 'true'
-        uses: softprops/action-gh-release@v2
+      - name: 'Upload FFI metadata'
+        uses: actions/upload-artifact@v4
         with:
-          name: 'v${{ steps.version.outputs.PACKAGE_VERSION }}'
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: build/out/cpp_bindings_windows.dll
+          if-no-files-found: error
+          name: cpp-bindings-windows-ffi
+          path: dist/ffi/x86_64.ffi.json
 
     outputs:
       package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
       is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
 
+  build-binary:
+    name: 'Build x86_64-windows-msvc'
+    runs-on: windows-2025
+
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Setup CMake'
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '4.3.x'
+
+      - name: 'Install LLVM 22.1.8'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: '22.1.8'
+          arch: x64
+          directory: ${{ runner.temp }}/llvm
+          force-url: 'https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe'
+
+      - name: 'Configure release'
+        run: |
+          cmake --preset windows-clang-release `
+            -DCPP_BINDINGS_WINDOWS_STATIC_MSVC_RUNTIME=ON
+
+      - name: 'Build and test'
+        run: |
+          cmake --build --preset windows-clang-release `
+            --target cpp_bindings_windows cpp_bindings_windows_tests `
+            --parallel 4
+          ctest --test-dir build `
+            --output-on-failure `
+            --output-junit test-report.xml
+
+      - name: 'Stage and verify binary'
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse -Path build -Filter cpp_bindings_windows.dll -File |
+            Select-Object -First 1
+          if (-not $dll) {
+            throw 'cpp_bindings_windows.dll not found under build/'
+          }
+
+          New-Item -ItemType Directory -Force -Path dist/x86_64-windows-msvc | Out-Null
+          Copy-Item -Force $dll.FullName dist/x86_64-windows-msvc/cpp_bindings_windows.dll
+          ./scripts/verify_release_binary.ps1 `
+            dist/x86_64-windows-msvc/cpp_bindings_windows.dll `
+            x86_64-windows-msvc
+
+      - name: 'Upload test report'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: warn
+          name: test-report-x86_64-windows-msvc
+          path: build/test-report.xml
+
+      - name: 'Upload binary'
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          name: cpp-bindings-windows-x86_64-windows-msvc
+          path: dist/x86_64-windows-msvc/cpp_bindings_windows.dll
+
   test-unit-cpp:
     name: 'Run: Test Unit C++'
-    needs: [ 'build-binary' ]
+    needs: ['build-binary']
     uses: './.github/workflows/test_unit_cpp.yml'
     with:
-      artifact-name: cpp_bindings_windows
-
+      artifact-name: cpp-bindings-windows-x86_64-windows-msvc
     permissions:
       contents: read
       checks: write
 
+  create-release:
+    name: 'Create GitHub release'
+    needs: ['generate-metadata', 'build-binary', 'test-unit-cpp']
+    if: github.ref_type == 'tag' && needs.generate-metadata.outputs.is_valid_package_version == 'true'
+    runs-on: windows-2025
+    permissions:
+      contents: write
+
+    steps:
+      - name: 'Download binary'
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-bindings-windows-x86_64-windows-msvc
+          path: release/binary
+
+      - name: 'Download FFI metadata'
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-bindings-windows-ffi
+          path: release/ffi
+
+      - name: 'Name release assets'
+        shell: pwsh
+        run: |
+          Move-Item release/binary/cpp_bindings_windows.dll `
+            release/cpp_bindings_windows-x86_64-windows-msvc.dll
+          Move-Item release/ffi/x86_64.ffi.json `
+            release/cpp_bindings_windows-x86_64-windows-msvc.ffi.json
+
+      - name: 'Create GitHub release'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 'v${{ needs.generate-metadata.outputs.package_version }}'
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release/cpp_bindings_windows-x86_64-windows-msvc.dll
+            release/cpp_bindings_windows-x86_64-windows-msvc.ffi.json
+
   publish-jsr:
     name: 'Run: Publish JSR'
-    needs: [ 'build-binary', 'test-unit-cpp' ]
+    needs: ['generate-metadata', 'build-binary', 'test-unit-cpp']
     uses: './.github/workflows/publish_jsr.yml'
     with:
-      publish: ${{ needs.build-binary.outputs.is_valid_package_version == 'true' }}
-      version: ${{ needs.build-binary.outputs.package_version }}
-      artifact-name: cpp_bindings_windows
-
+      publish: ${{ needs.generate-metadata.outputs.is_valid_package_version == 'true' }}
+      version: ${{ needs.generate-metadata.outputs.package_version }}
+      artifact-name: cpp-bindings-windows-x86_64-windows-msvc
+      ffi-artifact-name: cpp-bindings-windows-ffi
     permissions:
       contents: read
       id-token: write

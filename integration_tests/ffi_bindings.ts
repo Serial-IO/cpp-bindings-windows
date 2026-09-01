@@ -37,6 +37,7 @@ export async function loadSerialLib(
 
     const possiblePaths = [
         libraryPath,
+        "../build/cpp_bindings_windows.dll",
         "../build/Release/cpp_bindings_windows.dll",
         "../build/cpp_bindings_windows/Release/cpp_bindings_windows.dll",
         "../build/**/Release/cpp_bindings_windows.dll",
@@ -69,5 +70,3 @@ export async function loadSerialLib(
 
     return lib;
 }
-
-
