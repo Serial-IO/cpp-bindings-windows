@@ -16,9 +16,6 @@ jobs:
     runs-on: windows-2025
     env:
       ASTREIN_VERSION: '2.0.0'
-    outputs:
-      package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
-      is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
 
     steps:
       - name: 'Checkout repository'
@@ -48,7 +45,9 @@ jobs:
       - name: 'Configure metadata context'
         shell: pwsh
         run: |
-          cmake -S . -B build/ffi -G Ninja `
+          cmake -S . `
+            -B build/ffi `
+            -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_CXX_COMPILER=clang-cl `
@@ -107,6 +106,10 @@ jobs:
           if-no-files-found: error
           name: cpp-bindings-windows-ffi
           path: dist/ffi/x86_64.ffi.json
+
+    outputs:
+      package_version: ${{ steps.version.outputs.PACKAGE_VERSION }}
+      is_valid_package_version: ${{ steps.check-tag.outputs.IS_VALID_PACKAGE_VERSION }}
 
   build-binary:
     name: 'Build x86_64-windows-msvc'
