@@ -59,16 +59,16 @@ inline auto readImpl(int64_t handle, void *buffer, int buffer_size, int timeout_
 
     while (total_read < buffer_size)
     {
-        int waiting = 0;
-        if (!bytesWaiting(context.handle, &waiting))
+        int chunk_size = 1;
+        if (terminator_size <= 0)
         {
-            return failWin32<int>(callback, static_cast<StatusCodeValue>(StatusCode::Control::kGetStateError));
-        }
+            int waiting = 0;
+            if (!bytesWaiting(context.handle, &waiting))
+            {
+                return failWin32<int>(callback, static_cast<StatusCodeValue>(StatusCode::Control::kGetStateError));
+            }
 
-        int chunk_size = waiting > 0 ? std::min(waiting, buffer_size - total_read) : 1;
-        if (terminator_size > 0)
-        {
-            chunk_size = std::min(chunk_size, kTerminatedReadChunkSize);
+            chunk_size = waiting > 0 ? std::min(waiting, buffer_size - total_read) : 1;
         }
 
         const int current_timeout = readTimeout(timeout_ms, multiplier, total_read == 0, terminator_size > 0);
