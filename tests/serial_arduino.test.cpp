@@ -1,6 +1,9 @@
+#include <cpp_core/interface/serial_clear_buffer_in.h>
 #include <cpp_core/interface/serial_close.h>
 #include <cpp_core/interface/serial_open.h>
 #include <cpp_core/interface/serial_read.h>
+#include <cpp_core/interface/serial_read_until.h>
+#include <cpp_core/interface/serial_read_until_sequence.h>
 #include <cpp_core/interface/serial_write.h>
 #include <cpp_core/status_code.h>
 #include <gtest/gtest.h>
@@ -14,6 +17,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace
 {
@@ -133,6 +137,42 @@ TEST_F(SerialArduinoTest, MultipleEchoCycles)
                   std::string_view(messages[message_index], static_cast<size_t>(message_length)))
             << "Cycle " << message_index << ": echo content mismatch";
     }
+}
+
+TEST_F(SerialArduinoTest, ReadUntilHandlesLongPayload)
+{
+    ASSERT_EQ(serialClearBufferIn(handle_, nullptr), 0);
+
+    std::string message(1000, 'A');
+    message.push_back('\n');
+    ASSERT_EQ(serialWrite(handle_, message.data(), static_cast<int>(message.size()), 3000, 1, nullptr),
+              static_cast<int>(message.size()));
+
+    std::vector<char> buffer(message.size());
+    char newline = '\n';
+    const int read_bytes =
+        serialReadUntil(handle_, buffer.data(), static_cast<int>(buffer.size()), 3000, 1, &newline, nullptr);
+
+    ASSERT_EQ(read_bytes, static_cast<int>(message.size()));
+    EXPECT_EQ(std::string_view(buffer.data(), static_cast<std::size_t>(read_bytes)), message);
+}
+
+TEST_F(SerialArduinoTest, ReadUntilSequenceHandlesLongPayload)
+{
+    ASSERT_EQ(serialClearBufferIn(handle_, nullptr), 0);
+
+    std::string message(1000, 'A');
+    message += "\r\n";
+    ASSERT_EQ(serialWrite(handle_, message.data(), static_cast<int>(message.size()), 3000, 1, nullptr),
+              static_cast<int>(message.size()));
+
+    std::vector<char> buffer(message.size());
+    char sequence[] = "\r\n";
+    const int read_bytes =
+        serialReadUntilSequence(handle_, buffer.data(), static_cast<int>(buffer.size()), 3000, 1, sequence, nullptr);
+
+    ASSERT_EQ(read_bytes, static_cast<int>(message.size()));
+    EXPECT_EQ(std::string_view(buffer.data(), static_cast<std::size_t>(read_bytes)), message);
 }
 
 TEST_F(SerialArduinoTest, ReadTimeout)

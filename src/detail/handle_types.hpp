@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common_types.hpp"
+#include "read_ahead_buffer.hpp"
 #include "windows.hpp"
 
 #include <cpp_core/unique_resource.hpp>
@@ -45,6 +46,7 @@ struct HandleState
     std::atomic<int64_t> bytes_written_total{0};
     std::atomic<bool> abort_read{false};
     std::atomic<bool> abort_write{false};
+    ReadAheadBuffer read_ahead;
     std::mutex pending_io_mutex;
     OVERLAPPED *pending_read = nullptr;
     OVERLAPPED *pending_write = nullptr;

@@ -21,6 +21,7 @@ extern "C"
                 cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
                 static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Io::kClearBufferInError));
         }
+        context.state->read_ahead.clear();
         return static_cast<int>(cpp_core::StatusCode::kSuccess);
     }
 

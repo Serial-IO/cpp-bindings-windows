@@ -15,13 +15,22 @@ inline auto waitForPendingIo(HANDLE handle, const std::shared_ptr<HandleState> &
     if (wait_result == WAIT_TIMEOUT)
     {
         (void)CancelIoEx(handle, overlapped);
-        DWORD ignored = 0;
-        (void)GetOverlappedResult(handle, overlapped, &ignored, TRUE);
+        DWORD transferred = 0;
+        const BOOL completed = GetOverlappedResult(handle, overlapped, &transferred, TRUE);
+        const DWORD error = completed != FALSE ? ERROR_SUCCESS : GetLastError();
         if (finishPendingIo(state, operation, overlapped))
         {
             return {.outcome = IoOutcome::kAborted};
         }
-        return {.outcome = IoOutcome::kTimedOut};
+        if (completed != FALSE || transferred > 0)
+        {
+            return {.outcome = IoOutcome::kCompleted, .bytes_transferred = static_cast<int>(transferred)};
+        }
+        if (error == ERROR_OPERATION_ABORTED)
+        {
+            return {.outcome = IoOutcome::kTimedOut};
+        }
+        return {.outcome = IoOutcome::kError, .error = error};
     }
 
     if (wait_result != WAIT_OBJECT_0)
