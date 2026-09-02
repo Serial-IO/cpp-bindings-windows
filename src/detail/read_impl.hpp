@@ -5,9 +5,9 @@
 #include "consume_abort.hpp"
 #include "copy_until_terminator.hpp"
 #include "fail_win32.hpp"
-#include "multiplier_timeout.hpp"
 #include "note_bytes_transferred.hpp"
 #include "read_chunk.hpp"
+#include "read_timeout.hpp"
 
 #include <cpp_core/validation.hpp>
 
@@ -71,8 +71,7 @@ inline auto readImpl(int64_t handle, void *buffer, int buffer_size, int timeout_
             chunk_size = std::min(chunk_size, kTerminatedReadChunkSize);
         }
 
-        const int current_timeout =
-            total_read == 0 ? cpp_core::clampTimeout(timeout_ms) : multiplierTimeout(timeout_ms, multiplier);
+        const int current_timeout = readTimeout(timeout_ms, multiplier, total_read == 0, terminator_size > 0);
         std::array<unsigned char, kTerminatedReadChunkSize> chunk{};
         unsigned char *destination = terminator_size > 0 ? chunk.data() : output + total_read;
         const auto result = readChunk(context, destination, chunk_size, current_timeout);

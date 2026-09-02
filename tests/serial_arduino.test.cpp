@@ -151,7 +151,7 @@ TEST_F(SerialArduinoTest, ReadUntilHandlesLongPayload)
     std::vector<char> buffer(message.size());
     char newline = '\n';
     const int read_bytes =
-        serialReadUntil(handle_, buffer.data(), static_cast<int>(buffer.size()), 3000, 1, &newline, nullptr);
+        serialReadUntil(handle_, buffer.data(), static_cast<int>(buffer.size()), 3000, 0, &newline, nullptr);
 
     ASSERT_EQ(read_bytes, static_cast<int>(message.size()));
     EXPECT_EQ(std::string_view(buffer.data(), static_cast<std::size_t>(read_bytes)), message);
@@ -169,7 +169,7 @@ TEST_F(SerialArduinoTest, ReadUntilSequenceHandlesLongPayload)
     std::vector<char> buffer(message.size());
     char sequence[] = "\r\n";
     const int read_bytes =
-        serialReadUntilSequence(handle_, buffer.data(), static_cast<int>(buffer.size()), 3000, 1, sequence, nullptr);
+        serialReadUntilSequence(handle_, buffer.data(), static_cast<int>(buffer.size()), 3000, 0, sequence, nullptr);
 
     ASSERT_EQ(read_bytes, static_cast<int>(message.size()));
     EXPECT_EQ(std::string_view(buffer.data(), static_cast<std::size_t>(read_bytes)), message);
