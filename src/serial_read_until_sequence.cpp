@@ -2,33 +2,24 @@
 
 #include "detail/read_impl.hpp"
 
-#include <cstring>
-
 extern "C"
 {
 
-    MODULE_API auto serialReadUntilSequence(int64_t handle, void *buffer, int buffer_size, int timeout_ms,
-                                            int multiplier, void *sequence, ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialReadUntilSequence(int64_t handle, std::uint8_t *buffer, int buffer_size,
+                                            const cpp_core::SerialTimeoutConfig *timeout_config,
+                                            const std::uint8_t *sequence, int sequence_size,
+                                            ErrorCallbackT error_callback) -> int
     {
         const auto callback = cpp_bindings_windows::detail::effectiveErrorCallback(error_callback);
-        if (sequence == nullptr)
+        if (sequence == nullptr || sequence_size <= 0)
         {
             return cpp_core::failMsg<int>(
                 callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Io::kBufferError),
-                "Sequence pointer must not be null");
+                "Sequence must not be null and sequence_size must be positive");
         }
 
-        const auto *sequence_bytes = static_cast<const unsigned char *>(sequence);
-        const int sequence_size = static_cast<int>(std::strlen(reinterpret_cast<const char *>(sequence_bytes)));
-        if (sequence_size <= 0)
-        {
-            return cpp_core::failMsg<int>(
-                callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Io::kBufferError),
-                "Sequence must not be empty");
-        }
-
-        return cpp_bindings_windows::detail::readImpl(handle, buffer, buffer_size, timeout_ms, multiplier,
-                                                      sequence_bytes, sequence_size, callback);
+        return cpp_bindings_windows::detail::readImpl(handle, buffer, buffer_size, timeout_config, sequence,
+                                                      sequence_size, callback);
     }
 
 } // extern "C"

@@ -2,12 +2,11 @@
 #include <cpp_core/interface/serial_abort_write.h>
 #include <cpp_core/interface/serial_in_bytes_total.h>
 #include <cpp_core/interface/serial_list_ports.h>
-#include <cpp_core/interface/serial_monitor_ports.h>
 #include <cpp_core/interface/serial_out_bytes_total.h>
 #include <cpp_core/interface/serial_read.h>
-#include <cpp_core/interface/serial_read_until.h>
 #include <cpp_core/interface/serial_read_until_sequence.h>
 #include <cpp_core/interface/serial_set_error_callback.h>
+#include <cpp_core/interface/serial_set_event_callback.h>
 #include <cpp_core/interface/serial_set_read_callback.h>
 #include <cpp_core/interface/serial_set_write_callback.h>
 #include <cpp_core/status_code.h>
@@ -48,7 +47,7 @@ class SerialExtendedApiTest : public ::testing::Test
         serialSetErrorCallback(nullptr);
         serialSetReadCallback(nullptr);
         serialSetWriteCallback(nullptr);
-        ASSERT_EQ(serialMonitorPorts(nullptr, nullptr), 0);
+        ASSERT_EQ(serialSetEventCallback(nullptr, nullptr), 0);
     }
 
     void TearDown() override
@@ -56,7 +55,7 @@ class SerialExtendedApiTest : public ::testing::Test
         serialSetErrorCallback(nullptr);
         serialSetReadCallback(nullptr);
         serialSetWriteCallback(nullptr);
-        (void)serialMonitorPorts(nullptr, nullptr);
+        (void)serialSetEventCallback(nullptr, nullptr);
     }
 };
 
@@ -65,22 +64,31 @@ TEST_F(SerialExtendedApiTest, GlobalErrorCallbackActsAsFallback)
     serialSetErrorCallback(globalErrorCallback);
 
     std::array<char, 4> buffer{};
-    EXPECT_EQ(serialRead(-1, buffer.data(), static_cast<int>(buffer.size()), 10, 1, nullptr), kInvalidHandleError);
+    const cpp_core::SerialTimeoutConfig timeout_config0{10, 1};
+    EXPECT_EQ(serialRead(-1, reinterpret_cast<std::uint8_t *>(buffer.data()), static_cast<int>(buffer.size()),
+                         &timeout_config0, nullptr),
+              kInvalidHandleError);
     EXPECT_EQ(g_last_error_code.load(std::memory_order_relaxed), kInvalidHandleError);
 }
 
 TEST_F(SerialExtendedApiTest, ReadHelpersValidateTerminators)
 {
     std::array<char, 4> buffer{};
-    EXPECT_EQ(serialReadUntil(1, buffer.data(), static_cast<int>(buffer.size()), 10, 1, nullptr, nullptr),
+    const cpp_core::SerialTimeoutConfig timeout_config1{10, 1};
+    EXPECT_EQ(serialReadUntilSequence(1, reinterpret_cast<std::uint8_t *>(buffer.data()),
+                                      static_cast<int>(buffer.size()), &timeout_config1, nullptr, 1, nullptr),
               kBufferError);
-    EXPECT_EQ(serialReadUntilSequence(1, buffer.data(), static_cast<int>(buffer.size()), 10, 1, nullptr, nullptr),
+    const cpp_core::SerialTimeoutConfig timeout_config2{10, 1};
+    EXPECT_EQ(serialReadUntilSequence(1, reinterpret_cast<std::uint8_t *>(buffer.data()),
+                                      static_cast<int>(buffer.size()), &timeout_config2, nullptr, 1, nullptr),
               kBufferError);
 
     char empty_sequence[] = "";
-    EXPECT_EQ(
-        serialReadUntilSequence(1, buffer.data(), static_cast<int>(buffer.size()), 10, 1, empty_sequence, nullptr),
-        kBufferError);
+    const cpp_core::SerialTimeoutConfig timeout_config3{10, 1};
+    EXPECT_EQ(serialReadUntilSequence(1, reinterpret_cast<std::uint8_t *>(buffer.data()),
+                                      static_cast<int>(buffer.size()), &timeout_config3,
+                                      reinterpret_cast<const std::uint8_t *>(empty_sequence), 0, nullptr),
+              kBufferError);
 }
 
 TEST_F(SerialExtendedApiTest, HandleBasedExtensionsRejectInvalidHandles)

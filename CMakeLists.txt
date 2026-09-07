@@ -65,7 +65,7 @@ set(
 CPMAddPackage(
     NAME cpp_core
     GITHUB_REPOSITORY Serial-IO/cpp-core
-    GIT_TAG v2.0.1
+    GIT_TAG v3.0.0
     OPTIONS
     "CMAKE_EXPORT_COMPILE_COMMANDS OFF"
 )
@@ -257,6 +257,9 @@ if(TEST_SOURCES)
     )
 
     target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_26)
+    target_compile_definitions(cpp_bindings_windows_tests PRIVATE
+        CPP_BINDINGS_WINDOWS_TEST_VERSION="${GIT_DESCRIBE}"
+    )
 
     include(GoogleTest)
     if(CMAKE_CROSSCOMPILING)

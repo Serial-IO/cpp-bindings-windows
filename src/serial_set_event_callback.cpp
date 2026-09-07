@@ -1,4 +1,4 @@
-#include <cpp_core/interface/serial_monitor_ports.h>
+#include <cpp_core/interface/serial_set_event_callback.h>
 
 #include "detail/fail_win32.hpp"
 #include "detail/win32_error_to_string.hpp"
@@ -9,6 +9,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -42,24 +43,8 @@ auto enumerateComPorts() -> std::optional<std::set<std::string>>
     return ports;
 }
 
-auto stopMonitor() -> void
-{
-    if (!g_monitor_thread.joinable())
-    {
-        return;
-    }
-    g_monitor_thread.request_stop();
-    g_wakeup.notify_all();
-    if (g_monitor_thread.get_id() == std::this_thread::get_id())
-    {
-        g_monitor_thread.detach();
-        return;
-    }
-    g_monitor_thread.join();
-}
-
 auto monitorLoop(std::stop_token stop_token, std::set<std::string> previous,
-                 void (*callback)(int event, const char *port), ErrorCallbackT error_callback) -> void
+                 void (*callback)(cpp_core::PortEvent event, const char *port), ErrorCallbackT error_callback) -> void
 {
     std::unique_lock wait_lock(g_wait_mutex);
     while (!stop_token.stop_requested())
@@ -83,16 +68,16 @@ auto monitorLoop(std::stop_token stop_token, std::set<std::string> previous,
 
         for (const auto &port : *current)
         {
-            if (!previous.contains(port))
+            if (!stop_token.stop_requested() && !previous.contains(port))
             {
-                callback(1, port.c_str());
+                callback(cpp_core::PortEvent::kAttached, port.c_str());
             }
         }
         for (const auto &port : previous)
         {
-            if (!current->contains(port))
+            if (!stop_token.stop_requested() && !current->contains(port))
             {
-                callback(0, port.c_str());
+                callback(cpp_core::PortEvent::kDetached, port.c_str());
             }
         }
         previous = std::move(*current);
@@ -104,25 +89,44 @@ auto monitorLoop(std::stop_token stop_token, std::set<std::string> previous,
 extern "C"
 {
 
-    MODULE_API auto serialMonitorPorts(void (*callback_function)(int event, const char *port),
-                                       ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialSetEventCallback(void (*callback_function)(cpp_core::PortEvent event, const char *port),
+                                           ErrorCallbackT error_callback) -> int
     {
-        std::lock_guard lock(g_monitor_mutex);
-        stopMonitor();
-        if (callback_function == nullptr)
-        {
-            return static_cast<int>(cpp_core::StatusCode::kSuccess);
-        }
-
         const auto callback = cpp_bindings_windows::detail::effectiveErrorCallback(error_callback);
-        auto initial_ports = enumerateComPorts();
-        if (!initial_ports)
+        std::jthread replacement;
+        if (callback_function != nullptr)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(
-                callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError));
+            auto initial_ports = enumerateComPorts();
+            if (!initial_ports)
+            {
+                return cpp_bindings_windows::detail::failWin32<int>(
+                    callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError));
+            }
+            try
+            {
+                replacement = std::jthread(monitorLoop, std::move(*initial_ports), callback_function, callback);
+            }
+            catch (const std::system_error &error)
+            {
+                return cpp_core::failMsg<int>(
+                    callback, static_cast<cpp_core::StatusCodeValue>(cpp_core::StatusCode::Monitor::kMonitorError),
+                    error.what());
+            }
         }
 
-        g_monitor_thread = std::jthread(monitorLoop, std::move(*initial_ports), callback_function, callback);
+        std::jthread previous;
+        {
+            std::lock_guard lock(g_monitor_mutex);
+            previous = std::move(g_monitor_thread);
+            g_monitor_thread = std::move(replacement);
+            previous.request_stop();
+            g_wakeup.notify_all();
+        }
+        // Join after releasing the mutex, so a callback may clear or replace itself.
+        if (previous.joinable() && previous.get_id() == std::this_thread::get_id())
+        {
+            previous.detach();
+        }
         return static_cast<int>(cpp_core::StatusCode::kSuccess);
     }
 

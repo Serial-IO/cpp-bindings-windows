@@ -35,7 +35,9 @@ class SerialOpenTest : public ::testing::Test
 
 TEST_F(SerialOpenTest, NullPortParameter)
 {
-    intptr_t result = serialOpen(nullptr, 9600, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(nullptr, &config, error_callback);
 
     EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Connection::kNotFoundError));
     EXPECT_NE(error_capture.last_message.find("nullptr"), std::string::npos);
@@ -43,25 +45,28 @@ TEST_F(SerialOpenTest, NullPortParameter)
 
 TEST_F(SerialOpenTest, BaudrateTooLow)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 100, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{100, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
-    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
+    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Configuration::kSetBaudrateError));
     EXPECT_NE(error_capture.last_message.find("baudrate"), std::string::npos);
 }
 
 TEST_F(SerialOpenTest, BaudrateTooLowBoundary)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 299, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{299, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
-    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
+    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Configuration::kSetBaudrateError));
 }
 
 TEST_F(SerialOpenTest, BaudrateBoundaryValid)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 300, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{300, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     // COM99999 does not exist, but should pass baudrate validation (kNotFoundError, not kSetStateError)
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
@@ -69,121 +74,136 @@ TEST_F(SerialOpenTest, BaudrateBoundaryValid)
 
 TEST_F(SerialOpenTest, DataBitsTooLow)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 4, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, static_cast<cpp_core::DataBits>(4), cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
-    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
+    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Configuration::kSetDataBitsError));
     EXPECT_NE(error_capture.last_message.find("data bits"), std::string::npos);
 }
 
 TEST_F(SerialOpenTest, DataBitsTooHigh)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 9, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, static_cast<cpp_core::DataBits>(9), cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
-    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
+    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Configuration::kSetDataBitsError));
 }
 
 TEST_F(SerialOpenTest, ValidDataBits5)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 5, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kFive, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, ValidDataBits6)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 6, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kSix, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, ValidDataBits7)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 7, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kSeven, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, ValidDataBits8)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, InvalidParity)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 5, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, static_cast<cpp_core::Parity>(5),
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_LT(result, 0);
 }
 
 TEST_F(SerialOpenTest, ValidParityNone)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, ValidParityEven)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 1, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kEven,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, ValidParityOdd)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 2, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kOdd,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, InvalidStopBits)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 3, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        static_cast<cpp_core::StopBits>(3), cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_LT(result, 0);
 }
 
 TEST_F(SerialOpenTest, ValidStopBits0)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 0, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
-TEST_F(SerialOpenTest, ValidStopBits1)
+TEST_F(SerialOpenTest, RejectsLegacyStopBits1)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        static_cast<cpp_core::StopBits>(1), cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
-    EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
+    EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Configuration::kSetStopBitsError));
 }
 
 TEST_F(SerialOpenTest, ValidStopBits2)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 2, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kTwo, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError));
 }
 
 TEST_F(SerialOpenTest, NonExistentPort)
 {
-    intptr_t result =
-        serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), 9600, 8, 0, 1, error_callback);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
 
     EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Connection::kNotFoundError));
 }
@@ -194,8 +214,9 @@ TEST_F(SerialOpenTest, VariousBaudrates)
 
     for (int baudrate : baudrates)
     {
-        intptr_t result = serialOpen(const_cast<void *>(static_cast<const void *>(kNonExistentPort)), baudrate, 8, 0, 1,
-                                     error_callback);
+        const cpp_core::SerialConfig config{baudrate, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                            cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+        intptr_t result = serialOpen(kNonExistentPort, &config, error_callback);
         EXPECT_NE(result, static_cast<intptr_t>(cpp_core::StatusCode::Control::kSetStateError))
             << "Baudrate " << baudrate << " should be valid";
     }
@@ -203,7 +224,9 @@ TEST_F(SerialOpenTest, VariousBaudrates)
 
 TEST_F(SerialOpenTest, NoErrorCallbackNullPort)
 {
-    intptr_t result = serialOpen(nullptr, 9600, 8, 0, 1, nullptr);
+    const cpp_core::SerialConfig config{9600, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                        cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+    intptr_t result = serialOpen(nullptr, &config, nullptr);
 
     EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Connection::kNotFoundError));
 }

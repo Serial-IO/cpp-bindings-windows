@@ -7,25 +7,25 @@
 extern "C"
 {
 
-    MODULE_API auto serialGetDataBits(int64_t handle, ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialGetDataBits(int64_t handle, ErrorCallbackT error_callback) -> cpp_core::DataBits
     {
         HANDLE native_handle = nullptr;
         const auto status =
             cpp_bindings_windows::detail::validateWin32Handle<int>(handle, error_callback, &native_handle);
         if (status < 0)
         {
-            return status;
+            return static_cast<cpp_core::DataBits>(status);
         }
 
         DCB serial_settings = {};
         serial_settings.DCBlength = sizeof(DCB);
         if (GetCommState(native_handle, &serial_settings) == 0)
         {
-            return cpp_bindings_windows::detail::failWin32<int>(error_callback,
-                                                                cpp_core::StatusCode::Control::kGetStateError);
+            return static_cast<cpp_core::DataBits>(cpp_bindings_windows::detail::failWin32<int>(
+                error_callback, cpp_core::StatusCode::Control::kGetStateError));
         }
 
-        return static_cast<int>(serial_settings.ByteSize);
+        return static_cast<cpp_core::DataBits>(static_cast<int>(serial_settings.ByteSize));
     }
 
 } // extern "C"

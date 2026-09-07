@@ -7,8 +7,24 @@ export type LoadedLibrary = Deno.DynamicLibrary<typeof symbols>;
 export type SerialLib = LoadedLibrary["symbols"];
 
 const symbols = {
+    meta: {
+        parameters: ["pointer"] as const,
+        result: "void" as const,
+    },
+    serialReadUntilSequence: {
+        parameters: ["i64", "pointer", "i32", "pointer", "pointer", "i32", "pointer"] as const,
+        result: "i32" as const,
+    },
+    serialWaitForDrain: {
+        parameters: ["i64", "pointer"] as const,
+        result: "i32" as const,
+    },
+    serialSetEventCallback: {
+        parameters: ["pointer", "pointer"] as const,
+        result: "i32" as const,
+    },
     serialOpen: {
-        parameters: ["pointer", "i32", "i32", "i32", "i32", "pointer"] as const,
+        parameters: ["pointer", "pointer", "pointer"] as const,
         result: "i64" as const,
     },
     serialClose: {
@@ -16,11 +32,11 @@ const symbols = {
         result: "i32" as const,
     },
     serialRead: {
-        parameters: ["i64", "pointer", "i32", "i32", "i32", "pointer"] as const,
+        parameters: ["i64", "pointer", "i32", "pointer", "pointer"] as const,
         result: "i32" as const,
     },
     serialWrite: {
-        parameters: ["i64", "pointer", "i32", "i32", "i32", "pointer"] as const,
+        parameters: ["i64", "pointer", "i32", "pointer", "pointer"] as const,
         result: "i32" as const,
     },
 };
@@ -36,7 +52,7 @@ export async function loadSerialLib(
     await Promise.resolve();
 
     const possiblePaths = [
-        libraryPath,
+        libraryPath ?? Deno.env.get("SERIAL_LIBRARY_PATH"),
         "../build/cpp_bindings_windows.dll",
         "../build/Release/cpp_bindings_windows.dll",
         "../build/cpp_bindings_windows/Release/cpp_bindings_windows.dll",

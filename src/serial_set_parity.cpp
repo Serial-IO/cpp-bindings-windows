@@ -7,7 +7,7 @@
 extern "C"
 {
 
-    MODULE_API auto serialSetParity(int64_t handle, int parity, ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialSetParity(int64_t handle, cpp_core::Parity parity, ErrorCallbackT error_callback) -> int
     {
         HANDLE native_handle = nullptr;
         const auto status =
@@ -18,7 +18,7 @@ extern "C"
         }
 
         BYTE windows_parity = NOPARITY;
-        switch (parity)
+        switch (cpp_core::toInt(parity))
         {
         case 0:
             windows_parity = NOPARITY;
@@ -44,7 +44,7 @@ extern "C"
         }
 
         serial_settings.Parity = windows_parity;
-        serial_settings.fParity = (parity != 0) ? TRUE : FALSE;
+        serial_settings.fParity = (parity != cpp_core::Parity::kNone) ? TRUE : FALSE;
 
         if (SetCommState(native_handle, &serial_settings) == 0)
         {

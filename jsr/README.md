@@ -24,7 +24,9 @@ Common release baselines are shown below for orientation:
 ## FFI metadata
 
 It also includes cpp-core FFI API metadata generated with
-[ASTrein](https://github.com/Katze719/ASTrein) at `bin/x86_64/ffi.json`. It describes the exported C symbols, parameter and
+[ASTrein 3.0.0](https://github.com/Katze719/ASTrein/releases/tag/v3.0.0) at
+`bin/x86_64/ffi.json`, using the `astrein_ffi_api` schema version 3.
+It describes the exported C symbols, parameter and
 return types, callbacks, structs, default values, and API documentation used by
 runtime-specific FFI adapter generators.
 
@@ -53,7 +55,7 @@ Deno.writeFileSync(path, Uint8Array.fromBase64(binary.data));
 
 const library = Deno.dlopen(path, {
   serialOpen: {
-    parameters: ["pointer", "i32", "i32", "i32", "i32", "pointer"],
+    parameters: ["pointer", "pointer", "pointer"],
     result: "i64",
   },
 });
@@ -88,7 +90,7 @@ await Bun.write(path, Buffer.from(binary.data, "base64"));
 
 const library = dlopen(path, {
   serialOpen: {
-    args: ["ptr", "i32", "i32", "i32", "i32", "ptr"],
+    args: ["ptr", "ptr", "ptr"],
     returns: "i64",
   },
 });
@@ -128,11 +130,8 @@ writeFileSync(path, Buffer.from(binary.data, "base64"));
 
 const library = koffi.load(path);
 library.func("serialOpen", "int64_t", [
-  "void *",
-  "int",
-  "int",
-  "int",
-  "int",
+  "const char *",
+  "const void *",
   "void *",
 ]);
 library.unload();
@@ -147,7 +146,7 @@ These examples verify that the native library can be loaded and that its
 the complete set of symbols and structs for generating or configuring
 runtime-specific bindings.
 
-Non-JavaScript consumers can download the same architecture-specific `.so` and
+Non-JavaScript consumers can download the same architecture-specific `.dll` and
 `.ffi.json` files directly from the
 [GitHub releases](https://github.com/Serial-IO/cpp-bindings-windows/releases).
 
