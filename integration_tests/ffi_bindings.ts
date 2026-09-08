@@ -8,38 +8,38 @@ export type SerialLib = LoadedLibrary["symbols"];
 
 const symbols = {
     meta: {
-        parameters: ["pointer"] as const,
-        result: "void" as const,
+        parameters: ["pointer"],
+        result: "void",
     },
     serialReadUntilSequence: {
-        parameters: ["i64", "pointer", "i32", "pointer", "pointer", "i32", "pointer"] as const,
-        result: "i32" as const,
+        parameters: ["i64", "pointer", "i32", "pointer", "pointer", "i32", "pointer"],
+        result: "i32",
     },
     serialWaitForDrain: {
-        parameters: ["i64", "pointer"] as const,
-        result: "i32" as const,
+        parameters: ["i64", "pointer"],
+        result: "i32",
     },
     serialSetEventCallback: {
-        parameters: ["pointer", "pointer"] as const,
-        result: "i32" as const,
+        parameters: ["pointer", "pointer"],
+        result: "i32",
     },
     serialOpen: {
-        parameters: ["pointer", "pointer", "pointer"] as const,
-        result: "i64" as const,
+        parameters: ["pointer", "pointer", "pointer"],
+        result: "i64",
     },
     serialClose: {
-        parameters: ["i64", "pointer"] as const,
-        result: "i32" as const,
+        parameters: ["i64", "pointer"],
+        result: "i32",
     },
     serialRead: {
-        parameters: ["i64", "pointer", "i32", "pointer", "pointer"] as const,
-        result: "i32" as const,
+        parameters: ["i64", "pointer", "i32", "pointer", "pointer"],
+        result: "i32",
     },
     serialWrite: {
-        parameters: ["i64", "pointer", "i32", "pointer", "pointer"] as const,
-        result: "i32" as const,
+        parameters: ["i64", "pointer", "i32", "pointer", "pointer"],
+        result: "i32",
     },
-};
+} as const;
 
 /**
  * Load the cpp-bindings-windows shared library

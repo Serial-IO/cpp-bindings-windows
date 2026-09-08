@@ -27,7 +27,7 @@ Deno.test({
 });
 
 Deno.test({
-    name: "cpp-core v3 configuration ABI",
+    name: "cpp-core configuration ABI",
     fn() {
         assertExists(lib);
         const config = new Int32Array([9600, 8, 0, 0, 0]);

@@ -15,10 +15,10 @@
 
 namespace
 {
-std::mutex g_monitor_mutex;
+std::mutex g_event_listener_mutex;
 std::mutex g_wait_mutex;
 std::condition_variable_any g_wakeup;
-std::jthread g_monitor_thread;
+std::jthread g_event_listener_thread;
 
 auto enumerateComPorts() -> std::optional<std::set<std::string>>
 {
@@ -43,8 +43,9 @@ auto enumerateComPorts() -> std::optional<std::set<std::string>>
     return ports;
 }
 
-auto monitorLoop(std::stop_token stop_token, std::set<std::string> previous,
-                 void (*callback)(cpp_core::PortEvent event, const char *port), ErrorCallbackT error_callback) -> void
+auto eventListenerLoop(std::stop_token stop_token, std::set<std::string> previous,
+                       void (*callback)(cpp_core::PortEvent event, const char *port), ErrorCallbackT error_callback)
+    -> void
 {
     std::unique_lock wait_lock(g_wait_mutex);
     while (!stop_token.stop_requested())
@@ -104,7 +105,7 @@ extern "C"
             }
             try
             {
-                replacement = std::jthread(monitorLoop, std::move(*initial_ports), callback_function, callback);
+                replacement = std::jthread(eventListenerLoop, std::move(*initial_ports), callback_function, callback);
             }
             catch (const std::system_error &error)
             {
@@ -116,9 +117,9 @@ extern "C"
 
         std::jthread previous;
         {
-            std::lock_guard lock(g_monitor_mutex);
-            previous = std::move(g_monitor_thread);
-            g_monitor_thread = std::move(replacement);
+            std::lock_guard lock(g_event_listener_mutex);
+            previous = std::move(g_event_listener_thread);
+            g_event_listener_thread = std::move(replacement);
             previous.request_stop();
             g_wakeup.notify_all();
         }
