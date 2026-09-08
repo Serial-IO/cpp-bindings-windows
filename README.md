@@ -10,6 +10,7 @@ writing to serial ports.
 
 ## Requirements
 
+- Windows 10 or newer to run the DLL
 - CMake 3.30 or newer (4.3 or newer when building with clang-cl)
 - Git
 - A compiler with sufficient C++26 support
@@ -60,6 +61,12 @@ ctest --test-dir build -C Release --output-on-failure
 
 Tests that require a serial device use `SERIAL_TEST_PORT` and are skipped when
 no suitable device is available.
+
+Serial port attach/detach callbacks use Windows Plug and Play notifications
+(`CM_Register_Notification` with `GUID_DEVINTERFACE_COMPORT`). Callbacks run on
+a dedicated dispatcher thread without polling. Existing ports are remembered
+when registering; only subsequent changes generate callbacks. A callback may
+replace or clear its own registration.
 
 The optional Deno FFI smoke tests require Deno 2 and a built DLL:
 
