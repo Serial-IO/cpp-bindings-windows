@@ -82,8 +82,8 @@
  * @module
  */
 
-import x86_64Library from "../../bin/x86_64/library.json" with { type: "json" };
-import x86_64ffi from "../../bin/x86_64/ffi.json" with { type: "json" };
+import x86_64Library from "../../bin/x86_64.json" with { type: "json" };
+import x86_64ffi from "../../bin/x86_64.ffi.json" with { type: "json" };
 
 /**
  * The serialized `x86_64-windows` shared library and its FFI metadata.
