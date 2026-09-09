@@ -191,7 +191,7 @@ endif()
 include(CTest)
 enable_testing()
 
-add_compile_definitions(_WIN32_WINNT=0x0A00 WINVER=0x0A00)
+add_compile_definitions(_WIN32_WINNT=_WIN32_WINNT_WIN10 WINVER=_WIN32_WINNT)
 
 # Library sources: src/*.cpp only, exclude *.test.cpp and test_helpers/
 file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
