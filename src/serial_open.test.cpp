@@ -1,10 +1,10 @@
 #include <cpp_core/interface/serial_open.h>
 #include <cpp_core/status_code.h>
 
+#include "detail/windows.hpp"
+
 #include <array>
 #include <string>
-
-#include "detail/windows.hpp"
 
 #include <gtest/gtest.h>
 
@@ -229,4 +229,24 @@ TEST_F(SerialOpenTest, NoErrorCallbackNullPort)
     intptr_t result = serialOpen(nullptr, &config, nullptr);
 
     EXPECT_EQ(result, static_cast<intptr_t>(cpp_core::StatusCode::Connection::kNotFoundError));
+}
+
+TEST_F(SerialOpenTest, RejectsNullAndInvalidConfigurationsBeforeOpening)
+{
+    EXPECT_EQ(serialOpen("COM99999", nullptr), static_cast<int>(cpp_core::StatusCode::Control::kSetStateError));
+    constexpr auto kConfig = cpp_core::SerialConfig::make<9600, cpp_core::DataBits::kEight>();
+    const auto check = [this](cpp_core::SerialConfig config, int expected) {
+        error_capture.last_code = 0;
+        EXPECT_EQ(serialOpen("COM99999", &config, error_callback), expected);
+        EXPECT_EQ(error_capture.last_code, expected);
+    };
+    auto config = kConfig;
+    config.parity = static_cast<cpp_core::Parity>(99);
+    check(config, static_cast<int>(cpp_core::StatusCode::Configuration::kSetParityError));
+    config = kConfig;
+    config.stop_bits = static_cast<cpp_core::StopBits>(1);
+    check(config, static_cast<int>(cpp_core::StatusCode::Configuration::kSetStopBitsError));
+    config = kConfig;
+    config.flow_mode = static_cast<cpp_core::FlowControl>(99);
+    check(config, static_cast<int>(cpp_core::StatusCode::Configuration::kSetFlowControlError));
 }

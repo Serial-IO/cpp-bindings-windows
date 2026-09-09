@@ -93,3 +93,26 @@ TEST_F(SerialReadTest, ReadNoErrorCallback)
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
+
+TEST_F(SerialReadTest, RejectsNullNegativeAndOverflowingTimeouts)
+{
+    constexpr int kTimeoutError = static_cast<int>(cpp_core::StatusCode::Configuration::kSetTimeoutError);
+    std::array<std::uint8_t, 4> buffer{};
+    const auto check = [&](const cpp_core::SerialTimeoutConfig *timeout) {
+        error_capture.last_code = 0;
+        EXPECT_EQ(serialRead(-1, buffer.data(), 4, timeout, error_callback), kTimeoutError);
+        EXPECT_EQ(error_capture.last_code, kTimeoutError);
+    };
+    check(nullptr);
+    for (const auto timeout : {cpp_core::SerialTimeoutConfig{-1, 1}, {1, -1}, {std::numeric_limits<int>::max(), 2}})
+    {
+        check(&timeout);
+    }
+}
+
+TEST_F(SerialReadTest, AcceptsZeroTimeoutWithMaximumMultiplier)
+{
+    std::array<std::uint8_t, 4> buffer{};
+    const cpp_core::SerialTimeoutConfig zero{0, std::numeric_limits<int>::max()};
+    EXPECT_EQ(serialRead(-1, buffer.data(), 4, &zero), static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
+}

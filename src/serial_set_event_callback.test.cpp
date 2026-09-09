@@ -1,3 +1,5 @@
+#include <cpp_core/interface/serial_set_event_callback.h>
+
 #include "detail/event_listener_state.hpp"
 
 #include <chrono>
@@ -247,5 +249,23 @@ TEST(SerialEventListenerTest, ConcurrentProducersWakeDispatcherAndPreserveEachDe
     for (const auto &[port, count] : counts)
     {
         EXPECT_EQ(count, 2) << port;
+    }
+}
+
+namespace
+{
+void portEvent(cpp_core::PortEvent, const char *)
+{
+}
+} // namespace
+
+TEST(SerialSetEventCallbackTest, EventCallbackCanBeReplacedAndCleared)
+{
+    EXPECT_EQ(serialSetEventCallback(nullptr), 0);
+    for (int i = 0; i < 3; ++i)
+    {
+        EXPECT_EQ(serialSetEventCallback(portEvent), 0);
+        EXPECT_EQ(serialSetEventCallback(portEvent), 0);
+        EXPECT_EQ(serialSetEventCallback(nullptr), 0);
     }
 }
