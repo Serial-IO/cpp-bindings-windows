@@ -42,11 +42,10 @@ examples write the library to disk, load it, and release it again.
 
 ### Deno
 
-Deno provides native JSR imports and the built-in `Deno.dlopen` FFI API. Save
-this as `example.ts`:
+Deno provides native JSR imports and the built-in `Deno.dlopen` FFI API:
 
 ```ts
-import { x86_64 } from "jsr:@serial/cpp-bindings-windows/bin";
+import { x86_64 } from "@serial/cpp-bindings-windows/bin";
 
 const binary = x86_64;
 const path = `./${binary.filename}`;
@@ -55,14 +54,12 @@ Deno.writeFileSync(path, Uint8Array.fromBase64(binary.data));
 
 const library = Deno.dlopen(path, {
   serialOpen: {
-    parameters: ["pointer", "pointer", "pointer"],
+    parameters: ["pointer", "i32", "i32", "i32", "i32", "pointer"],
     result: "i64",
   },
 });
 library.close();
 ```
-
-Run it with write and FFI permissions:
 
 ```sh
 deno run --allow-write --allow-ffi example.ts
@@ -70,13 +67,7 @@ deno run --allow-write --allow-ffi example.ts
 
 ### Bun
 
-Add the package through JSR's npm compatibility layer:
-
-```sh
-bunx jsr add @serial/cpp-bindings-windows
-```
-
-Then use Bun's built-in `bun:ffi` and `Bun.write` APIs:
+Use Bun's built-in `bun:ffi` and `Bun.write` APIs:
 
 ```ts
 import { dlopen } from "bun:ffi";
@@ -90,7 +81,7 @@ await Bun.write(path, Buffer.from(binary.data, "base64"));
 
 const library = dlopen(path, {
   serialOpen: {
-    args: ["ptr", "ptr", "ptr"],
+    args: ["ptr", "i32", "i32", "i32", "i32", "ptr"],
     returns: "i64",
   },
 });
@@ -110,13 +101,6 @@ bun run example.ts
 Node.js does not provide a general-purpose C FFI API. This example uses
 [Koffi](https://koffi.dev/), together with JSR's npm compatibility layer:
 
-```sh
-npx jsr add @serial/cpp-bindings-windows
-npm install koffi
-```
-
-Save this as `example.mjs`:
-
 ```js
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -130,8 +114,11 @@ writeFileSync(path, Buffer.from(binary.data, "base64"));
 
 const library = koffi.load(path);
 library.func("serialOpen", "int64_t", [
-  "const char *",
-  "const void *",
+  "void *",
+  "int",
+  "int",
+  "int",
+  "int",
   "void *",
 ]);
 library.unload();
