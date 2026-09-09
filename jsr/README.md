@@ -18,8 +18,8 @@ uses the generic x86-64 baseline.
 Common release baselines are shown below for orientation:
 
 | Distribution | Release baseline |
-| --- | --- |
-| Windows | 10+ |
+|:------------ |:---------------- |
+| Windows      | 10+              |
 
 ## FFI metadata
 
