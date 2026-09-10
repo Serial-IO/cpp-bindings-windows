@@ -102,6 +102,6 @@ const x86_64 = {
    * runtime-specific FFI adapters.
    */
   ffi: x86_64ffi,
-};
+} as const;
 
 export { x86_64 };
