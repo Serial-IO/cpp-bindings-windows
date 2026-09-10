@@ -65,7 +65,7 @@ set(
 CPMAddPackage(
     NAME cpp_core
     GITHUB_REPOSITORY Serial-IO/cpp-core
-    GIT_TAG v2.0.1
+    GIT_TAG v3.0.0
     OPTIONS
     "CMAKE_EXPORT_COMPILE_COMMANDS OFF"
 )
@@ -191,6 +191,8 @@ endif()
 include(CTest)
 enable_testing()
 
+add_compile_definitions(_WIN32_WINNT=_WIN32_WINNT_WIN10 WINVER=_WIN32_WINNT)
+
 # Library sources: src/*.cpp only, exclude *.test.cpp and test_helpers/
 file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(FILTER LIB_SOURCES EXCLUDE REGEX ".*\\.test\\.cpp$")
@@ -220,6 +222,10 @@ target_link_libraries(
     PRIVATE
     cpp_core::cpp_core
     setupapi
+    cfgmgr32
+    advapi32
+    user32
+    uuid
 )
 
 target_compile_features(cpp_bindings_windows PRIVATE cxx_std_26)
@@ -257,6 +263,9 @@ if(TEST_SOURCES)
     )
 
     target_compile_features(cpp_bindings_windows_tests PRIVATE cxx_std_26)
+    target_compile_definitions(cpp_bindings_windows_tests PRIVATE
+        CPP_BINDINGS_WINDOWS_TEST_VERSION="${GIT_DESCRIBE}"
+    )
 
     include(GoogleTest)
     if(CMAKE_CROSSCOMPILING)

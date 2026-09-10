@@ -7,7 +7,8 @@
 extern "C"
 {
 
-    MODULE_API auto serialSetDataBits(int64_t handle, int data_bits, ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialSetDataBits(int64_t handle, cpp_core::DataBits data_bits, ErrorCallbackT error_callback)
+        -> int
     {
         HANDLE native_handle = nullptr;
         const auto status =
@@ -17,7 +18,7 @@ extern "C"
             return status;
         }
 
-        if (data_bits < 5 || data_bits > 8)
+        if (cpp_core::toInt(data_bits) < 5 || cpp_core::toInt(data_bits) > 8)
         {
             return cpp_core::failMsg<int>(cpp_bindings_windows::detail::effectiveErrorCallback(error_callback),
                                           cpp_core::StatusCode::Configuration::kSetDataBitsError,

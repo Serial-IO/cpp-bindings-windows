@@ -29,7 +29,8 @@ class SerialWriteTest : public ::testing::Test
 
 TEST_F(SerialWriteTest, WriteNullBuffer)
 {
-    int result = serialWrite(1, nullptr, 10, 100, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{100, 0};
+    int result = serialWrite(1, nullptr, 10, &timeout_config, error_callback);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
     EXPECT_NE(error_capture.last_message.find("buffer"), std::string::npos);
@@ -38,7 +39,9 @@ TEST_F(SerialWriteTest, WriteNullBuffer)
 TEST_F(SerialWriteTest, WriteZeroBufferSize)
 {
     std::array<char, 10> buffer{};
-    int result = serialWrite(1, buffer.data(), 0, 100, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{100, 0};
+    int result =
+        serialWrite(1, reinterpret_cast<const std::uint8_t *>(buffer.data()), 0, &timeout_config, error_callback);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
 }
@@ -46,7 +49,9 @@ TEST_F(SerialWriteTest, WriteZeroBufferSize)
 TEST_F(SerialWriteTest, WriteNegativeBufferSize)
 {
     std::array<char, 10> buffer{};
-    int result = serialWrite(1, buffer.data(), -1, 100, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{100, 0};
+    int result =
+        serialWrite(1, reinterpret_cast<const std::uint8_t *>(buffer.data()), -1, &timeout_config, error_callback);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
 }
@@ -54,7 +59,9 @@ TEST_F(SerialWriteTest, WriteNegativeBufferSize)
 TEST_F(SerialWriteTest, WriteInvalidHandleZero)
 {
     const char *buffer = "test";
-    int result = serialWrite(0, buffer, static_cast<int>(strlen(buffer)), 100, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{100, 0};
+    int result = serialWrite(0, reinterpret_cast<const std::uint8_t *>(buffer), static_cast<int>(strlen(buffer)),
+                             &timeout_config, error_callback);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
@@ -62,7 +69,9 @@ TEST_F(SerialWriteTest, WriteInvalidHandleZero)
 TEST_F(SerialWriteTest, WriteInvalidHandleNegative)
 {
     const char *buffer = "test";
-    int result = serialWrite(-1, buffer, static_cast<int>(strlen(buffer)), 100, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{100, 0};
+    int result = serialWrite(-1, reinterpret_cast<const std::uint8_t *>(buffer), static_cast<int>(strlen(buffer)),
+                             &timeout_config, error_callback);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
@@ -71,7 +80,9 @@ TEST_F(SerialWriteTest, WriteHandleAboveIntMaxIsNotRejectedByRangeValidation)
 {
     const char *buffer = "test";
     auto too_large = static_cast<int64_t>(std::numeric_limits<int>::max()) + 1;
-    int result = serialWrite(too_large, buffer, static_cast<int>(strlen(buffer)), 100, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{100, 0};
+    int result = serialWrite(too_large, reinterpret_cast<const std::uint8_t *>(buffer),
+                             static_cast<int>(strlen(buffer)), &timeout_config, error_callback);
 
     EXPECT_NE(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
 }
@@ -79,7 +90,8 @@ TEST_F(SerialWriteTest, WriteHandleAboveIntMaxIsNotRejectedByRangeValidation)
 TEST_F(SerialWriteTest, WriteEmptyStringZeroSize)
 {
     const char *empty = "";
-    int result = serialWrite(1, empty, 0, 0, 0, error_callback);
+    const cpp_core::SerialTimeoutConfig timeout_config{0, 0};
+    int result = serialWrite(1, reinterpret_cast<const std::uint8_t *>(empty), 0, &timeout_config, error_callback);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Io::kBufferError));
 }
@@ -87,7 +99,24 @@ TEST_F(SerialWriteTest, WriteEmptyStringZeroSize)
 TEST_F(SerialWriteTest, WriteNoErrorCallback)
 {
     std::array<char, 10> buffer{};
-    int result = serialWrite(0, buffer.data(), 1, 0, 0, nullptr);
+    const cpp_core::SerialTimeoutConfig timeout_config{0, 0};
+    int result = serialWrite(0, reinterpret_cast<const std::uint8_t *>(buffer.data()), 1, &timeout_config, nullptr);
 
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError));
+}
+
+TEST_F(SerialWriteTest, RejectsNullNegativeAndOverflowingTimeouts)
+{
+    constexpr int kTimeoutError = static_cast<int>(cpp_core::StatusCode::Configuration::kSetTimeoutError);
+    std::array<std::uint8_t, 4> buffer{};
+    const auto check = [&](const cpp_core::SerialTimeoutConfig *timeout) {
+        error_capture.last_code = 0;
+        EXPECT_EQ(serialWrite(-1, buffer.data(), 4, timeout, error_callback), kTimeoutError);
+        EXPECT_EQ(error_capture.last_code, kTimeoutError);
+    };
+    check(nullptr);
+    for (const auto timeout : {cpp_core::SerialTimeoutConfig{-1, 1}, {1, -1}, {std::numeric_limits<int>::max(), 2}})
+    {
+        check(&timeout);
+    }
 }

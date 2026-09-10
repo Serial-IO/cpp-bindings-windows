@@ -14,10 +14,18 @@
 
 namespace cpp_bindings_windows::detail
 {
-inline auto readImpl(int64_t handle, void *buffer, int buffer_size, int timeout_ms, int multiplier,
-                     const unsigned char *terminator, int terminator_size, ErrorCallbackT error_callback) -> int
+inline auto readImpl(int64_t handle, std::uint8_t *buffer, int buffer_size,
+                     const cpp_core::SerialTimeoutConfig *timeout_config, const unsigned char *terminator,
+                     int terminator_size, ErrorCallbackT error_callback) -> int
 {
     const auto callback = effectiveErrorCallback(error_callback);
+    const auto timeout_status = cpp_core::validateTimeoutConfig<int>(timeout_config, callback);
+    if (timeout_status < 0)
+    {
+        return timeout_status;
+    }
+    const int timeout_ms = timeout_config->timeout_ms;
+    const int multiplier = timeout_config->multiplier;
     const auto buffer_status = cpp_core::validateBuffer<int>(buffer, buffer_size, callback);
     if (buffer_status < 0)
     {

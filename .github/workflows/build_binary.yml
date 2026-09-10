@@ -15,7 +15,7 @@ jobs:
     name: 'Generate FFI metadata (x86_64-windows-msvc)'
     runs-on: windows-2025
     env:
-      ASTREIN_VERSION: '2.0.0'
+      ASTREIN_VERSION: '3.0.0'
 
     steps:
       - name: 'Checkout repository'
@@ -69,7 +69,7 @@ jobs:
           if ($metadata.schema -ne 'astrein_ffi_api') {
             throw "Unexpected FFI metadata schema: $($metadata.schema)"
           }
-          if ($metadata.schemaVersion -ne 2) {
+          if ($metadata.schemaVersion -ne 3) {
             throw "Unexpected FFI metadata schema version: $($metadata.schemaVersion)"
           }
 

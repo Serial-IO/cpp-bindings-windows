@@ -15,36 +15,17 @@
 
 extern "C"
 {
-    MODULE_API auto serialOpen(void *port, int baudrate, int data_bits, int parity, int stop_bits,
-                               ErrorCallbackT error_callback) -> intptr_t
+    MODULE_API auto serialOpen(const char *port, const cpp_core::SerialConfig *config, ErrorCallbackT error_callback)
+        -> intptr_t
     {
         const auto callback = cpp_bindings_windows::detail::effectiveErrorCallback(error_callback);
-        const auto parameter_status = cpp_core::validateOpenParams<intptr_t>(port, baudrate, data_bits, callback);
+        const auto parameter_status = cpp_core::validateOpenParams<intptr_t>(port, config, callback);
         if (parameter_status < 0)
         {
             return parameter_status;
         }
 
-        if (parity < static_cast<int>(cpp_core::Parity::kNone) || parity > static_cast<int>(cpp_core::Parity::kOdd))
-        {
-            return cpp_core::failMsg<intptr_t>(callback, cpp_core::StatusCode::Control::kSetStateError,
-                                               "Invalid parity: must be 0, 1, or 2");
-        }
-        const auto parity_value = static_cast<cpp_core::Parity>(parity);
-
-        // stop_bits: 0 or 1 = one stop bit (0 kept for backward compat), 2 = two stop bits
-        if (stop_bits != static_cast<int>(cpp_core::StopBits::kOne) && stop_bits != 1 &&
-            stop_bits != static_cast<int>(cpp_core::StopBits::kTwo))
-        {
-            return cpp_core::failMsg<intptr_t>(callback, cpp_core::StatusCode::Control::kSetStateError,
-                                               "Invalid stop bits: must be 0, 1, or 2");
-        }
-        const auto stop_bits_value = (stop_bits == static_cast<int>(cpp_core::StopBits::kTwo))
-                                         ? cpp_core::StopBits::kTwo
-                                         : cpp_core::StopBits::kOne;
-
-        const auto *port_utf8 = static_cast<const char *>(port);
-        std::wstring port_wide = cpp_bindings_windows::detail::utf8ToWide(port_utf8);
+        std::wstring port_wide = cpp_bindings_windows::detail::utf8ToWide(port);
         if (port_wide.empty())
         {
             return cpp_core::failMsg<intptr_t>(callback, cpp_core::StatusCode::Connection::kNotFoundError,
@@ -65,8 +46,7 @@ extern "C"
                                                                      cpp_core::StatusCode::Connection::kNotFoundError);
         }
 
-        const auto settings = cpp_bindings_windows::detail::applyLineSettings(handle.get(), baudrate, data_bits,
-                                                                              parity_value, stop_bits_value);
+        const auto settings = cpp_bindings_windows::detail::applyLineSettings(handle.get(), *config);
         if (!settings.has_value())
         {
             return static_cast<intptr_t>(cpp_core::toCStatus(settings, callback));

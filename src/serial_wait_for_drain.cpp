@@ -1,4 +1,4 @@
-#include <cpp_core/interface/serial_drain.h>
+#include <cpp_core/interface/serial_wait_for_drain.h>
 
 #include "detail/acquire_handle_context.hpp"
 #include "detail/fail_win32.hpp"
@@ -6,7 +6,7 @@
 extern "C"
 {
 
-    MODULE_API auto serialDrain(int64_t handle, ErrorCallbackT error_callback) -> int
+    MODULE_API auto serialWaitForDrain(int64_t handle, ErrorCallbackT error_callback) -> int
     {
         cpp_bindings_windows::detail::HandleContext context;
         const auto status = cpp_bindings_windows::detail::acquireHandleContext<int>(handle, error_callback, &context);

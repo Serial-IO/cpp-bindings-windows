@@ -18,13 +18,15 @@ uses the generic x86-64 baseline.
 Common release baselines are shown below for orientation:
 
 | Distribution | Release baseline |
-| --- | --- |
-| Windows | 10+ |
+|:------------ |:---------------- |
+| Windows      | 10+              |
 
 ## FFI metadata
 
 It also includes cpp-core FFI API metadata generated with
-[ASTrein](https://github.com/Katze719/ASTrein) at `bin/x86_64/ffi.json`. It describes the exported C symbols, parameter and
+[ASTrein 3.0.0](https://github.com/Katze719/ASTrein/releases/tag/v3.0.0) at
+`bin/x86_64/ffi.json`, using the `astrein_ffi_api` schema version 3.
+It describes the exported C symbols, parameter and
 return types, callbacks, structs, default values, and API documentation used by
 runtime-specific FFI adapter generators.
 
@@ -40,11 +42,10 @@ examples write the library to disk, load it, and release it again.
 
 ### Deno
 
-Deno provides native JSR imports and the built-in `Deno.dlopen` FFI API. Save
-this as `example.ts`:
+Deno provides native JSR imports and the built-in `Deno.dlopen` FFI API:
 
 ```ts
-import { x86_64 } from "jsr:@serial/cpp-bindings-windows/bin";
+import { x86_64 } from "@serial/cpp-bindings-windows/bin";
 
 const binary = x86_64;
 const path = `./${binary.filename}`;
@@ -60,21 +61,13 @@ const library = Deno.dlopen(path, {
 library.close();
 ```
 
-Run it with write and FFI permissions:
-
 ```sh
 deno run --allow-write --allow-ffi example.ts
 ```
 
 ### Bun
 
-Add the package through JSR's npm compatibility layer:
-
-```sh
-bunx jsr add @serial/cpp-bindings-windows
-```
-
-Then use Bun's built-in `bun:ffi` and `Bun.write` APIs:
+Use Bun's built-in `bun:ffi` and `Bun.write` APIs:
 
 ```ts
 import { dlopen } from "bun:ffi";
@@ -108,13 +101,6 @@ bun run example.ts
 Node.js does not provide a general-purpose C FFI API. This example uses
 [Koffi](https://koffi.dev/), together with JSR's npm compatibility layer:
 
-```sh
-npx jsr add @serial/cpp-bindings-windows
-npm install koffi
-```
-
-Save this as `example.mjs`:
-
 ```js
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -147,7 +133,7 @@ These examples verify that the native library can be loaded and that its
 the complete set of symbols and structs for generating or configuring
 runtime-specific bindings.
 
-Non-JavaScript consumers can download the same architecture-specific `.so` and
+Non-JavaScript consumers can download the same architecture-specific `.dll` and
 `.ffi.json` files directly from the
 [GitHub releases](https://github.com/Serial-IO/cpp-bindings-windows/releases).
 

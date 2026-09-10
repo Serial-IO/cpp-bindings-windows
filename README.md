@@ -4,11 +4,13 @@
 [![JSR](https://jsr.io/badges/@serial/cpp-bindings-windows)](https://jsr.io/@serial/cpp-bindings-windows)
 
 Windows DLL for serial communication. It implements the
-[`cpp-core`](https://github.com/Serial-IO/cpp-core) interface and provides functions for discovering, monitoring,
-opening, configuring, reading from, and writing to serial ports.
+[`cpp-core`](https://github.com/Serial-IO/cpp-core) interface and provides
+functions for discovering, monitoring, opening, configuring, reading from, and
+writing to serial ports.
 
 ## Requirements
 
+- Windows 10 or newer to run the DLL
 - CMake 3.30 or newer (4.3 or newer when building with clang-cl)
 - Git
 - A compiler with sufficient C++26 support
@@ -16,7 +18,8 @@ opening, configuring, reading from, and writing to serial ports.
   - Windows with Visual Studio 2022 and the C++ workload
   - Linux with an x86-64 MinGW-w64 toolchain for cross-compilation
 
-CMake downloads `cpp-core` and GoogleTest automatically during configuration.
+CMake downloads `cpp-core` **v3.0.0** and GoogleTest automatically during
+configuration.
 
 ## Build on Windows
 
@@ -31,7 +34,7 @@ The DLL is written below `build/Release/`.
 
 Official release and JSR artifacts currently target `x86_64-windows-msvc`.
 Release DLLs statically include the MSVC runtime and expose the complete C API
-described by `cpp-core` 2.0.1.
+described by `cpp-core` 3.0.0.
 
 ## Cross-compile with MinGW
 
@@ -43,9 +46,9 @@ cmake --build --preset windows-mingw-release \
   --target cpp_bindings_windows cpp_bindings_windows_tests
 ```
 
-The DLL and test executable are written to `build/mingw/`. The tests must be
-run on Windows (or in a compatible Windows runtime); cross-compilation alone
-does not execute them.
+The DLL and test executable are written to `build/mingw/`. The tests must be run
+on Windows (or in a compatible Windows runtime); cross-compilation alone does
+not execute them.
 
 ## Tests
 
@@ -59,6 +62,12 @@ ctest --test-dir build -C Release --output-on-failure
 Tests that require a serial device use `SERIAL_TEST_PORT` and are skipped when
 no suitable device is available.
 
+Serial port attach/detach callbacks use Windows Plug and Play notifications
+(`CM_Register_Notification` with `GUID_DEVINTERFACE_COMPORT`). Callbacks run on
+a dedicated dispatcher thread without polling. Existing ports are remembered
+when registering; only subsequent changes generate callbacks. A callback may
+replace or clear its own registration.
+
 The optional Deno FFI smoke tests require Deno 2 and a built DLL:
 
 ```powershell
@@ -70,10 +79,12 @@ deno task test
 
 Release and JSR packages include `x86_64-windows-msvc` API metadata generated
 from the public `cpp-core` headers with
-[ASTrein](https://github.com/Katze719/ASTrein). It describes exported symbols,
-types, callbacks, default values, and API documentation for downstream FFI
-adapter generators.
+[ASTrein 3.0.0](https://github.com/Katze719/ASTrein/releases/tag/v3.0.0), using
+the `astrein_ffi_api` schema version 3. It describes exported symbols, types,
+callbacks, default values, and API documentation for downstream FFI adapter
+generators.
 
 ## License
 
-This project is licensed under the [GNU Lesser General Public License v3.0](LICENSE).
+This project is licensed under the
+[GNU Lesser General Public License v3.0](LICENSE).

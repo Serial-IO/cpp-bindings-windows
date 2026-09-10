@@ -1,6 +1,7 @@
 #include <cpp_core/interface/serial_close.h>
 #include <cpp_core/interface/serial_open.h>
 #include <cpp_core/interface/serial_read.h>
+#include <cpp_core/interface/serial_read_until_sequence.h>
 #include <cpp_core/interface/serial_write.h>
 #include <cpp_core/status_code.h>
 #include <gtest/gtest.h>
@@ -37,8 +38,9 @@ auto readExact(intptr_t handle, char *destination, int requested_byte_count, int
 
         // Read remaining bytes with a small per-call timeout to make progress.
         const int remaining_byte_count = requested_byte_count - total_bytes_read;
-        const int bytes_read =
-            serialRead(handle, destination + total_bytes_read, remaining_byte_count, 200, 1, nullptr);
+        const cpp_core::SerialTimeoutConfig timeout_config0{200, 1};
+        const int bytes_read = serialRead(handle, reinterpret_cast<std::uint8_t *>(destination + total_bytes_read),
+                                          remaining_byte_count, &timeout_config0, nullptr);
         if (bytes_read < 0)
         {
             return bytes_read;
@@ -63,7 +65,9 @@ class SerialArduinoTest : public ::testing::Test
         const char *environment_port = std::getenv("SERIAL_TEST_PORT");
         const char *port = (environment_port != nullptr && environment_port[0] != '\0') ? environment_port : "COM5";
 
-        handle_ = serialOpen(const_cast<void *>(static_cast<const void *>(port)), 115200, 8, 0, 0, nullptr);
+        const cpp_core::SerialConfig config1{115200, cpp_core::DataBits::kEight, cpp_core::Parity::kNone,
+                                             cpp_core::StopBits::kOne, cpp_core::FlowControl::kNone};
+        handle_ = serialOpen(port, &config1, nullptr);
         if (handle_ <= 0)
         {
             GTEST_SKIP() << "Could not open serial port '" << (environment_port ? environment_port : "COM5")
@@ -96,7 +100,9 @@ TEST_F(SerialArduinoTest, WriteReadEcho)
     const char *test_message = "Hello Arduino!\n";
     const int message_length = static_cast<int>(strlen(test_message));
 
-    const int bytes_written = serialWrite(handle_, test_message, message_length, 1000, 1, nullptr);
+    const cpp_core::SerialTimeoutConfig timeout_config2{1000, 1};
+    const int bytes_written = serialWrite(handle_, reinterpret_cast<const std::uint8_t *>(test_message), message_length,
+                                          &timeout_config2, nullptr);
     EXPECT_EQ(bytes_written, message_length)
         << "Should write all bytes. Written: " << bytes_written << ", Expected: " << message_length;
 
@@ -121,7 +127,9 @@ TEST_F(SerialArduinoTest, MultipleEchoCycles)
     {
         const int message_length = static_cast<int>(strlen(messages[message_index]));
 
-        const int bytes_written = serialWrite(handle_, messages[message_index], message_length, 1000, 1, nullptr);
+        const cpp_core::SerialTimeoutConfig timeout_config3{1000, 1};
+        const int bytes_written = serialWrite(handle_, reinterpret_cast<const std::uint8_t *>(messages[message_index]),
+                                              message_length, &timeout_config3, nullptr);
         EXPECT_EQ(bytes_written, message_length) << "Cycle " << message_index << ": write failed";
 
         Sleep(500);
@@ -138,14 +146,18 @@ TEST_F(SerialArduinoTest, MultipleEchoCycles)
 TEST_F(SerialArduinoTest, ReadTimeout)
 {
     char buffer[256];
-    const int read_bytes = serialRead(handle_, buffer, static_cast<int>(sizeof(buffer)), 100, 1, nullptr);
+    const cpp_core::SerialTimeoutConfig timeout_config4{100, 1};
+    const int read_bytes = serialRead(handle_, reinterpret_cast<std::uint8_t *>(buffer),
+                                      static_cast<int>(sizeof(buffer)), &timeout_config4, nullptr);
     EXPECT_GE(read_bytes, 0) << "Timeout should return 0, not error";
 }
 
 TEST(SerialInvalidHandleTest, InvalidHandleRead)
 {
     char buffer[256];
-    const int result = serialRead(-1, buffer, static_cast<int>(sizeof(buffer)), 1000, 1, nullptr);
+    const cpp_core::SerialTimeoutConfig timeout_config5{1000, 1};
+    const int result = serialRead(-1, reinterpret_cast<std::uint8_t *>(buffer), static_cast<int>(sizeof(buffer)),
+                                  &timeout_config5, nullptr);
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError))
         << "Should return error for invalid handle";
 }
@@ -153,7 +165,8 @@ TEST(SerialInvalidHandleTest, InvalidHandleRead)
 TEST(SerialInvalidHandleTest, InvalidHandleWrite)
 {
     const char *data = "test";
-    const int result = serialWrite(-1, data, 4, 1000, 1, nullptr);
+    const cpp_core::SerialTimeoutConfig timeout_config6{1000, 1};
+    const int result = serialWrite(-1, reinterpret_cast<const std::uint8_t *>(data), 4, &timeout_config6, nullptr);
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::Connection::kInvalidHandleError))
         << "Should return error for invalid handle";
 }
@@ -162,4 +175,18 @@ TEST(SerialInvalidHandleTest, InvalidHandleClose)
 {
     const int result = serialClose(-1, nullptr);
     EXPECT_EQ(result, static_cast<int>(cpp_core::StatusCode::kSuccess));
+}
+
+TEST_F(SerialArduinoTest, ReadUntilBinarySequenceLeavesTrailingData)
+{
+    constexpr std::uint8_t payload[] = {'a', 0, 'b', 'x', 'y'};
+    constexpr std::uint8_t terminator[] = {0, 'b'};
+    constexpr auto timeout = cpp_core::SerialTimeoutConfig::make<1000, 1>();
+    ASSERT_EQ(serialWrite(handle_, payload, 5, &timeout), 5);
+    std::uint8_t buffer[16]{};
+    ASSERT_EQ(serialReadUntilSequence(handle_, buffer, 16, &timeout, terminator, 2), 3);
+    EXPECT_EQ(std::memcmp(buffer, payload, 3), 0);
+    ASSERT_EQ(readExact(handle_, reinterpret_cast<char *>(buffer), 2, 3000), 2);
+    EXPECT_EQ(buffer[0], 'x');
+    EXPECT_EQ(buffer[1], 'y');
 }
